@@ -1,0 +1,424 @@
+/* =============================================================
+   DirDocs 后台布局样式（经 ?a=asset&t=_sys&f=admin.css 通道输出）
+   v1.3 后台重写：与前台「高级技术文档主题」同语言——56px 毛玻璃顶栏
+   （.top-navbar 复用 builtin.css）+ 左侧竖导航（<992px 收进 Bootstrap
+   offcanvas）+ 纸张卡片内容区 + 居中纸张卡登录页。
+   组件类（.btn/.input/.select/.textarea/.field/.form-hint/.card/
+   .alert/.table/.badge 等）由 builtin.css 提供，本文件不重定义组件，
+   只写后台骨架与卡片内部节奏；颜色一律引用其 token（--bg/--surface/…）。
+   ============================================================= */
+
+/* ---- 顶栏：复用前台 .top-navbar（56px 毛玻璃 sticky），只补后台品牌件 ---- */
+.admin-brand-tag{
+  flex:0 0 auto;
+  font-size:.7rem;font-weight:600;letter-spacing:.05em;
+  padding:1px 7px;border-radius:4px;
+  color:var(--accent);background:var(--accent-weak);
+}
+
+/* ---- 工作区：侧栏 275 + 内容纸张（与前台三栏工作区同构，去 TOC 栏） ---- */
+.admin-shell{min-height:calc(100vh - var(--nav-h))}
+.admin-side{
+  width:var(--sidebar-width);flex:0 0 var(--sidebar-width);
+  height:calc(100vh - var(--nav-h));
+  position:sticky;top:var(--nav-h);
+  background:var(--bg);
+  border-right:1px solid var(--border);
+  overflow-y:auto;overscroll-behavior:contain;
+  padding:1.25rem .85rem 2rem 1rem;
+  scrollbar-width:thin;
+}
+.admin-nav{display:flex;flex-direction:column;gap:2px}
+.admin-nav a{
+  position:relative;
+  display:flex;align-items:center;gap:.55rem;
+  padding:.5rem .65rem;border-radius:6px;
+  color:var(--text2);text-decoration:none;
+  font-size:.87rem;line-height:1.4;
+  transition:background-color .15s ease,color .15s ease;
+}
+.admin-nav a:hover{color:var(--text);background:rgba(148,163,184,.12)}
+.admin-nav a.on{color:var(--accent);background:var(--accent-weak);font-weight:500}
+/* 选中行左侧 2px 主色指示条（与前台目录树同语言；对位到侧栏左缘，仅桌面侧栏） */
+.admin-side .admin-nav a.on::before{
+  content:"";position:absolute;left:-1rem;top:18%;bottom:18%;
+  width:2px;background:var(--accent);border-radius:2px;
+}
+.ad-ico{flex:0 0 auto;font-size:1rem;opacity:.85}
+
+/* ---- 主内容区 ---- */
+.admin-main{min-width:0}
+.admin-stage{width:100%;max-width:960px;margin:1.25rem auto 3rem}
+.admin-head{margin-bottom:1.15rem}
+.admin-head h1{margin:0;font-size:1.35rem;line-height:1.3;font-weight:700;color:var(--text)}
+.admin-stack{display:flex;flex-direction:column;gap:1.1rem}
+.admin-stack>.alert{margin:0}
+.admin-foot{margin-top:3rem;font-size:.75rem;color:var(--text2)}
+
+/* ---- 卡片内部结构（.card 本体来自 builtin.css；此处只规整内部节奏） ---- */
+.admin-main .card{padding:0;overflow:hidden}
+.admin-card-head{display:flex;align-items:center;gap:.8rem;padding:.85rem 1.1rem;border-bottom:1px solid var(--border)}
+.admin-card-head h2{margin:0;font-size:.98rem;font-weight:600;color:var(--text)}
+.admin-card-head .btn,.admin-card-head form{margin-left:auto}
+.admin-card-body{padding:1rem 1.1rem}
+.admin-card-body>*:first-child{margin-top:0}
+.admin-card-body>*:last-child{margin-bottom:0}
+.admin-card-body-tight{padding-top:.4rem}
+.admin-card-foot{padding:.65rem 1.1rem;border-top:1px solid var(--border)}
+.admin-hint-flat{margin:0}
+/* 节标题：大写小字灰（与前台 sidebar-section-title 同语言） */
+.admin-sub{margin:1.2rem 0 .7rem;font-size:.72rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--text2)}
+.admin-sub:first-of-type{margin-top:1.1rem}
+
+/* ---- 表格（.table 组件来自 builtin.css；这里压掉 Bootstrap 的单元格底色，
+        让发丝线表格落在纯白纸面上） ---- */
+.admin-wrap{overflow-x:auto}
+.admin-main .table{margin:0;width:100%}
+.admin-main .table th,.admin-main .table td{background-color:transparent}
+.admin-kv th{width:9.5em;font-weight:500;color:var(--text2);white-space:nowrap}
+.admin-col-act{white-space:nowrap}
+.admin-actions{display:inline-flex;flex-wrap:nowrap;gap:.4rem;align-items:center}
+.admin-inline-form{display:contents}
+.admin-path{font-family:var(--mono);font-size:.8rem;word-break:break-all}
+.admin-dim{color:var(--text2);font-size:.85rem;white-space:nowrap}
+.admin-empty{margin:0;padding:1.4rem 1.1rem;color:var(--text2);font-size:.9rem}
+/* 行内代码跟随 DirDocs token（Bootstrap Reboot 的 code 配色不适用后台） */
+.admin-main code{font-family:var(--mono);font-size:.85em;color:var(--accent);background:var(--accent-weak);padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+.admin-main pre code{background:none;color:inherit;padding:0;font-size:inherit}
+
+/* ---- 表单布局 ---- */
+.admin-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:.9rem}
+.admin-checks{display:flex;flex-wrap:wrap;gap:.4rem 1.4rem;margin:.9rem 0 0}
+.admin-checks label{display:flex;align-items:center;gap:.45rem;font-size:.88rem;cursor:pointer}
+.admin-checks input{width:15px;height:15px;accent-color:var(--accent);margin:0}
+.admin-actions-row{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;margin-top:1rem}
+.admin-actions-row-tight{margin-top:0}
+
+/* ---- 编辑器 ---- */
+.admin-editor-card{margin-bottom:.9rem}
+.admin-editor-form{display:block}
+.admin-editor-bar{display:flex;flex-wrap:wrap;gap:.8rem;align-items:flex-end}
+.admin-editor-path{flex:1;min-width:230px}
+.admin-editor{min-height:55vh;font-family:var(--mono);font-size:.86rem;line-height:1.65;tab-size:4;
+ border-radius:0 0 var(--radius-sm) var(--radius-sm)}
+.admin-editor-prevwrap{margin-top:.8rem;word-break:break-all}
+.admin-editor-dirty{
+  margin-left:auto;font-size:.72rem;font-weight:600;letter-spacing:.03em;
+  padding:1px 8px;border-radius:999px;color:var(--warn);background:var(--warn-weak);
+}
+.admin-rename-old{display:block;margin:0;padding:.45rem .6rem;background:var(--bg);
+ border:1px solid var(--border);border-radius:var(--radius-sm)}
+
+/* Markdown 工具条（行为在 admin.js；无 JS 时整条 hidden，不影响 textarea） */
+.admin-md-bar{
+  display:flex;flex-wrap:wrap;align-items:center;gap:.15rem;
+  padding:.35rem .5rem;background:var(--bg);
+  border:1px solid var(--border);border-bottom:none;
+  border-radius:var(--radius-sm) var(--radius-sm) 0 0;
+}
+.admin-md-bar .md-tb{
+  appearance:none;border:1px solid transparent;background:none;cursor:pointer;
+  color:var(--text2);font-size:.8rem;line-height:1;
+  min-width:1.9rem;height:1.9rem;padding:0 .4rem;border-radius:6px;
+  display:inline-flex;align-items:center;justify-content:center;
+  transition:background-color .12s ease,color .12s ease;
+}
+.admin-md-bar .md-tb:hover{background:var(--accent-weak);color:var(--accent)}
+.admin-md-bar .md-tb:active{transform:scale(.94)}
+.admin-md-bar .md-tb-sep{
+  width:1px;height:1.1rem;margin:0 .3rem;background:var(--border);flex:0 0 auto;
+}
+/* 状态栏：字数 / 行数 / 保存时间 */
+.admin-md-status{
+  display:flex;flex-wrap:wrap;gap:.9rem;align-items:center;
+  padding:.4rem .65rem;font-size:.75rem;color:var(--text3);font-family:var(--mono);
+  background:var(--bg);border:1px solid var(--border);border-top:none;
+  border-radius:0 0 var(--radius-sm) var(--radius-sm);margin-top:-1px;
+}
+.admin-md-saveok{color:var(--ok)}
+
+/* ---- 文档树（目录即分类）---- */
+.admin-toolbar{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center}
+.admin-toolbar-search{position:relative;flex:1;min-width:200px}
+.admin-toolbar-search .ad-ico{
+  position:absolute;left:.6rem;top:50%;transform:translateY(-50%);
+  color:var(--text3);pointer-events:none;font-size:.85rem;
+}
+.admin-toolbar-search .input{padding-left:1.9rem;width:100%}
+.admin-toolbar-acts{display:flex;flex-wrap:wrap;gap:.45rem;margin-left:auto}
+
+.admin-tree{font-size:.86rem}
+.admin-tree-dir{border-bottom:1px solid var(--border-subtle)}
+.admin-tree-dir:last-child{border-bottom:none}
+.admin-tree-row{
+  display:flex;align-items:center;gap:.4rem;
+  padding:.4rem .55rem;border-radius:6px;
+  transition:background-color .12s ease;
+}
+.admin-tree-row:hover{background:rgba(148,163,184,.1)}
+.admin-tree-dirrow{cursor:pointer;list-style:none}
+.admin-tree-dirrow::-webkit-details-marker{display:none}
+.admin-tree-dirrow .ad-ico{color:var(--text3);flex:0 0 auto}
+.admin-tree-dirrow .bi-folder{color:var(--accent)}
+.admin-tree-caret{flex:0 0 auto;width:1rem;color:var(--text3);font-size:.7rem;
+ display:inline-flex;align-items:center;justify-content:center;
+ transition:transform .15s ease}
+.admin-tree-dir[open]>.admin-tree-dirrow .admin-tree-caret{transform:rotate(90deg)}
+.admin-tree-caret-off{visibility:hidden}
+.admin-tree-name{font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;
+ text-overflow:ellipsis;max-width:14rem;flex:0 1 auto;text-decoration:none}
+.admin-tree-doc .admin-tree-name{font-weight:400}
+.admin-tree-doc .admin-tree-name:hover{color:var(--accent)}
+/* 行右侧元信息区：路径 + 时间 + 操作。桌面右对齐一整行；
+   窄屏（见文件末尾响应式）变为第二行，路径与操作各自独占一行 */
+.admin-tree-meta{
+  margin-left:auto;flex:1 1 auto;min-width:0;
+  display:flex;align-items:center;gap:.55rem;
+}
+.admin-tree-path{
+  font-family:var(--mono);font-size:.72rem;color:var(--text3);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1 1 4rem;min-width:2rem;
+}
+.admin-tree-time{flex:0 0 auto;font-size:.75rem}
+.admin-tree-acts{margin-left:auto;flex:0 0 auto;opacity:0;transition:opacity .12s ease}
+.admin-tree-row:hover .admin-tree-acts,
+.admin-tree-row:focus-within .admin-tree-acts{opacity:1}
+/* 触屏设备没有 hover：操作常显 */
+@media (hover:none){.admin-tree-acts{opacity:1}}
+.admin-tree-tag{
+  flex:0 0 auto;font-size:.66rem;font-weight:600;letter-spacing:.03em;
+  padding:0 6px;border-radius:999px;color:var(--accent);background:var(--accent-weak);
+}
+.admin-tree-tag-new{color:var(--ok);background:var(--ok-weak)}
+.admin-tree-sub{margin-left:1.05rem;border-left:1px dashed var(--border);padding-left:.35rem}
+.admin-tree-empty{margin:.6rem .55rem 0;color:var(--text2);font-size:.85rem}
+
+/* ---- Toast（右下角轻提示）---- */
+.admin-toast-box{
+  position:fixed;right:1rem;bottom:1rem;z-index:1080;
+  display:flex;flex-direction:column;gap:.5rem;align-items:flex-end;
+  pointer-events:none;
+}
+.admin-toast{
+  display:flex;align-items:center;gap:.45rem;
+  max-width:min(22rem,calc(100vw - 2rem));
+  padding:.55rem .8rem;font-size:.85rem;
+  color:var(--text);background:var(--surface);
+  border:1px solid var(--border);border-left:3px solid var(--ok);
+  border-radius:var(--radius-sm);box-shadow:var(--shadow);
+  animation:admin-toast-in .18s ease-out;
+}
+.admin-toast-err{border-left-color:var(--danger)}
+.admin-toast .bi{flex:0 0 auto}
+.admin-toast .bi-check-circle{color:var(--ok)}
+.admin-toast .bi-exclamation-circle{color:var(--danger)}
+@keyframes admin-toast-in{from{opacity:0;transform:translateY(.4rem)}to{opacity:1;transform:none}}
+
+/* ---- 确认弹窗皮肤（Bootstrap Modal 结构，配色跟随后台 token）---- */
+.admin-modal-host .modal-content{
+  background:var(--surface);color:var(--text);
+  border:1px solid var(--border);border-radius:var(--radius);
+}
+.admin-modal-host .modal-header,.admin-modal-host .modal-footer{border-color:var(--border-subtle)}
+.admin-modal-host .modal-title{font-size:.95rem;font-weight:600}
+.admin-modal-host .admin-modal-msg{margin:0;font-size:.88rem;line-height:1.6;word-break:break-all}
+.admin-modal-host .btn-close{filter:none}
+[data-bs-theme="dark"] .admin-modal-host .btn-close{filter:invert(1) grayscale(1) brightness(2)}
+
+/* ---- 附件分组 / 上传回执 ---- */
+.admin-group-title{margin:1.15rem 0 .55rem;font-size:.78rem;font-weight:600;color:var(--text2);font-family:var(--mono)}
+.admin-card-body .admin-group-title:first-child{margin-top:.2rem}
+.admin-up-list{margin:.45rem 0 0;padding-left:1.25em}
+.admin-up-list li{margin:.22rem 0;font-size:.86rem;line-height:1.55;word-break:break-all}
+
+/* ---- 代码块（伪静态规则等） ---- */
+.admin-code{margin:0;padding:.85rem 1rem;background:var(--bg);border:1px solid var(--border);
+ border-radius:var(--radius-sm);overflow:auto;font-family:var(--mono);font-size:.8rem;line-height:1.6}
+.admin-code code{background:none;color:inherit;padding:0;font-size:inherit}
+
+/* ---- 登录 / 首设引导：冷灰底居中一张 400px 级纸张卡 ---- */
+.admin-auth{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;
+ gap:1.1rem;padding:1.4rem}
+.admin-auth-theme{position:fixed;top:.9rem;right:1rem;z-index:10}
+.admin-auth-card{
+  width:100%;max-width:400px;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);box-shadow:var(--paper-shadow);
+  padding:2rem 1.9rem 1.9rem;
+}
+.admin-auth-head{padding-bottom:1.15rem;margin-bottom:1.25rem;border-bottom:1px solid var(--border-subtle);text-align:center}
+.admin-auth-brand{display:flex;align-items:center;justify-content:center;gap:.55rem;
+ margin:0;font-size:1.4rem;font-weight:700;color:var(--text);letter-spacing:-.01em}
+.admin-auth-sub{margin:.5rem 0 0;font-size:.7rem;font-weight:500;color:var(--text3);letter-spacing:.3em;text-indent:.3em}
+.admin-auth-submit{width:100%;margin-top:.35rem}
+.admin-auth-foot{margin:0;font-size:.84rem}
+.admin-auth-foot a{color:var(--text2);transition:color .15s ease}
+.admin-auth-foot a:hover{color:var(--text)}
+
+/* ---- 极简中间页（CSRF 失败等，无导航）：同纸张语言 ---- */
+.admin-plain{
+  width:calc(100% - 2.4rem);max-width:34em;margin:14vh auto;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);box-shadow:var(--paper-shadow);
+  padding:1.6rem 1.5rem;display:flex;flex-direction:column;gap:.9rem;
+}
+.admin-plain h1{margin:0;font-size:1.25rem;color:var(--text)}
+
+/* =============================================================
+   响应式：移动端（<768px）重排
+   问题背景：桌面版后台的信息密度是按「一行一条」设计的（树行是单 flex 行，
+   右侧 meta 区挤着路径+时间+操作；编辑器是三列 grid + 工具条 + 底部操作行）。
+   窄屏下全部挤在一行会糊成一团。移动端策略：
+   1. 树行改两行：第一行 图标+标题+徽标，第二行 meta 区内路径/操作换行堆叠；
+   2. 编辑器三列 grid 降为单列，工具条横向滚动（不换行挤压），
+      底部操作栏吸底并加大触控面积；
+   3. 顶栏品牌文字收敛，工具条按钮撑满一行两个；
+   4. 所有可点元素保持 ≥32px 触控高度。
+   ============================================================= */
+@media (max-width:767.98px){
+  /* ---- 全局：更紧的页面节奏 ---- */
+  .admin-stage{margin-top:.85rem;padding:0 .15rem}
+  .admin-head{margin-bottom:.85rem}
+  .admin-head h1{font-size:1.15rem}
+  .admin-stack{gap:.85rem}
+  .admin-card-head{padding:.7rem .85rem;flex-wrap:wrap;gap:.5rem}
+  .admin-card-head h2{font-size:.92rem}
+  .admin-card-head .btn,.admin-card-head form{margin-left:0}
+  .admin-card-body{padding:.8rem .85rem}
+  .admin-card-foot{padding:.55rem .85rem}
+  .admin-grid{grid-template-columns:1fr;gap:.2rem}
+  .admin-actions-row{gap:.5rem}
+  .admin-actions-row .btn{flex:1 1 auto;justify-content:center;min-height:36px}
+  .admin-wrap{-webkit-overflow-scrolling:touch}
+
+  /* ---- 顶栏：品牌只留站点名（后台 tag/版本号收起）---- */
+  .admin-brand-tag,.brand-version{display:none}
+
+  /* ---- 文档树：两行结构 ---- */
+  .admin-tree{font-size:.88rem}
+  .admin-tree-row{flex-wrap:wrap;padding:.5rem .5rem;gap:.3rem .45rem}
+  .admin-tree-name{max-width:none;flex:1 1 auto;min-width:0}
+  .admin-tree-meta{
+    margin-left:0;flex:1 0 100%;min-width:0;
+    display:flex;flex-wrap:wrap;align-items:center;gap:.3rem .55rem;
+    padding-left:1.35rem;                 /* 与标题文字对齐（caret+图标宽） */
+  }
+  /* 第一行：路径 + 时间同行（路径占满剩余） */
+  .admin-tree-path{flex:1 1 auto;min-width:0;font-size:.7rem;line-height:1.5}
+  .admin-tree-time{flex:0 0 auto;font-size:.72rem}
+  /* 第二行：操作组（常显 + 可换行） */
+  .admin-tree-acts{margin-left:0;flex:1 0 100%;min-width:0;
+    justify-content:flex-start;opacity:1;flex-wrap:wrap;gap:.35rem}
+  .admin-tree-acts .btn{min-height:32px;padding:.28rem .55rem;font-size:.78rem}
+  /* 文档行五个操作（查看/编辑/改名/复制/删除）一行放不下：隐藏「查看」
+     （标题整行可点进前台，见 .admin-tree-name 链接），其余允许换行 */
+  .admin-tree-doc .admin-tree-acts .admin-tree-view{display:none}
+  .admin-tree-tag{font-size:.62rem;padding:0 5px}
+  .admin-tree-sub{margin-left:.7rem;padding-left:.25rem}
+  .admin-tree-dirrow .admin-tree-meta{padding-left:1.35rem}
+  /* 文档标题整行可点（进前台查看），弥补隐藏的「查看」按钮 */
+  .admin-tree-doc .admin-tree-name{cursor:pointer;text-decoration:none}
+  .admin-tree-doc .admin-tree-name:hover{color:var(--accent);text-decoration:underline}
+
+  /* ---- 工具条：搜索独占一行，两个主按钮各占一半 ---- */
+  .admin-toolbar{gap:.5rem}
+  .admin-toolbar-search{flex:1 0 100%;min-width:0}
+  .admin-toolbar-acts{margin-left:0;flex:1 0 100%;display:grid;
+    grid-template-columns:1fr 1fr;gap:.5rem}
+  .admin-toolbar-acts .btn{justify-content:center;min-height:38px}
+
+  /* ---- 编辑器 ---- */
+  .admin-editor{min-height:48vh;font-size:.85rem}
+  .admin-editor-card{margin-bottom:.7rem}
+  .admin-editor-dirty{margin-left:auto}
+  /* 工具条：横向滚动，不换行（按钮多，换行会占掉半个屏幕） */
+  .admin-md-bar{
+    flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;
+    scrollbar-width:none;gap:.1rem;padding:.3rem .4rem;
+  }
+  .admin-md-bar::-webkit-scrollbar{display:none}
+  .admin-md-bar .md-tb{flex:0 0 auto;min-width:2.1rem;height:2.1rem}
+  .admin-md-bar .md-tb-sep{flex:0 0 auto;margin:0 .18rem}
+  .admin-md-status{gap:.7rem;font-size:.72rem}
+  /* 底部操作栏吸底：保存是最高频操作，任何滚动位置都能点到 */
+  .admin-editor-form{padding-bottom:3.6rem}
+  .admin-editor-actions{
+    position:fixed;left:0;right:0;bottom:0;z-index:1035;
+    margin:0;padding:.55rem .7rem calc(.55rem + env(safe-area-inset-bottom));
+    background:var(--topbar-bg);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+    border-top:1px solid var(--border);
+  }
+  .admin-editor-actions .btn{min-height:40px}
+  .admin-editor-actions .btn:first-child{flex:1 1 auto;justify-content:center}
+
+  /* ---- 表格（概览/附件/缓存等）：紧凑 + 可读 ---- */
+  .admin-main .table{font-size:.8rem}
+  .admin-main .table th,.admin-main .table td{padding:.42rem .45rem}
+  .admin-kv th{width:7em}
+  /* 表头与前台阅读档对齐：小屏不做大写+宽字距（会把「目录树缓存」撑成两行） */
+  .admin-main .table thead th{
+    text-transform:none;letter-spacing:0;font-size:.74rem;white-space:normal;
+  }
+  .admin-nowrap{white-space:nowrap}
+  /* 附件表窄屏太挤：复制引用/删除两按钮换行到第二行，行高撑开 */
+  .admin-col-act .admin-actions{flex-wrap:wrap;justify-content:flex-end;gap:.3rem}
+  /* 表格容器右边缘渐隐提示可横向滚动 */
+  .admin-wrap{background:linear-gradient(to right,transparent calc(100% - 12px),var(--border-subtle))}
+  /* 概览「最近更新」与「附件」表：窄屏取消路径列的等宽字体（中文路径
+     等宽字体偏宽），让文件名列拿到更多宽度；操作列允许换行不撑破容器 */
+  .admin-recent .admin-path,.admin-attach .admin-path{font-size:.76rem;word-break:break-all}
+  /* 附件表窄屏卡片化：文件名独占一行（长文件名可完整换行显示），
+     大小+时间一行、操作一行 —— 与「最近更新」同语言，也避开 table-cell
+     min-width 无效导致的 55px 文件名列 */
+  .admin-attach thead{display:none}
+  .admin-attach tbody tr{display:grid;grid-template-columns:1fr auto;gap:.25rem .6rem;
+    padding:.5rem .45rem;border-bottom:1px solid var(--border-subtle)}
+  .admin-attach tbody tr:last-child{border-bottom:none}
+  .admin-attach tbody td{border-bottom:none;padding:0}
+  .admin-attach tbody td:nth-child(1){grid-column:1/-1;min-width:0}
+  .admin-attach tbody td:nth-child(2){color:var(--text3);font-size:.72rem;white-space:nowrap;
+    justify-self:start}
+  .admin-attach tbody td:nth-child(3){color:var(--text3);font-size:.72rem;white-space:nowrap;
+    justify-self:end}
+  .admin-attach tbody td:last-child{grid-column:1/-1;text-align:left}
+  .admin-attach .admin-path{font-size:.76rem;word-break:break-all}
+  /* 最近更新表窄屏卡片化：路径独占一行，时间+操作一行——
+     与文档树同语言，避免 114px 路径列把长文件名切成竖排 */
+  .admin-recent thead{display:none}
+  .admin-recent tbody tr{display:grid;grid-template-columns:1fr auto;gap:.2rem .6rem;
+    padding:.5rem .45rem;border-bottom:1px solid var(--border-subtle)}
+  .admin-recent tbody tr:last-child{border-bottom:none}
+  .admin-recent tbody td{border-bottom:none;padding:0}
+  .admin-recent tbody td:first-child{grid-column:1/-1;min-width:0}
+  .admin-recent tbody td:nth-child(2){color:var(--text3);font-size:.72rem;text-align:left}
+  .admin-recent tbody td:last-child{text-align:right}
+
+  /* ---- Toast：底部居中，避开吸底操作栏 ---- */
+  .admin-toast-box{left:.75rem;right:.75rem;bottom:4.2rem;align-items:stretch}
+  .admin-toast{max-width:none}
+
+  /* ---- 登录/首设：卡片占满 ---- */
+  .admin-auth-card{max-width:none}
+}
+@media (max-width:575.98px){
+  .admin-auth-card{padding:1.5rem 1.25rem 1.4rem}
+  .admin-plain{margin:8vh auto}
+}
+
+/* ---- TOTP 两步验证（设置页启用确认步 + 登录第二页） ---- */
+/* 二维码容器：恒白底——深色模式下二维码也要能扫（QRCode 库默认黑模块白底） */
+.admin-qr{width:max-content;padding:10px;background:#fff;border-radius:8px;margin:.2rem 0 .8rem}
+.admin-qr img,.admin-qr canvas{display:block}
+.admin-totp-input{max-width:11em;font-family:var(--mono);letter-spacing:.35em;font-variant-numeric:tabular-nums}
+.admin-code-inline{display:inline-block;padding:.25rem .6rem;background:var(--bg);
+  border:1px solid var(--border);border-radius:6px;font-size:.95rem;letter-spacing:.08em;word-break:break-all}
+
+/* ---- 修订历史（v1.14.0）：预览与版本对比 ---- */
+/* 对比块：删除行红底、新增行绿底（与全局 danger/ok 变量同源，深浅色自适应） */
+.md-diff{max-height:60vh;overflow:auto;font-size:12.5px;line-height:1.6;white-space:pre-wrap;word-break:break-all}
+.md-diff span{display:block}
+.md-diff span.d{background:var(--danger-weak);color:var(--danger)}
+.md-diff span.a{background:var(--ok-weak);color:var(--ok)}
+
+/* ---- 草稿标记（v1.15.0）：琥珀色区别于 NEW 的蓝 ---- */
+.admin-tree-tag-draft{background:var(--warn-weak);color:var(--warn)}
