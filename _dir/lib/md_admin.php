@@ -369,6 +369,9 @@ function md_totp_uri($secret, $cfg)
  * 存储形态：_dir/cache/history/<md5(rel)>/ 下 meta.json + 版本文件。
  * 覆盖保存（编辑器）与恢复操作前自动归档当前内容；每篇保留最近 20 版，
  * 单版超过 2MB 不归档（防 cache 目录膨胀失控）；与最近一版同内容跳过（不产生空转版本）。
+ * 版本文件是带闸门的 PHP 数据文件（v1.16.0，与 tree.php/search.php 同一防线）：
+ * 被绕过程序直接 Web 访问时输出 403 空白——Nginx 共享主机贴不了 deny 规则也不泄露
+ * 草稿历史全文；v1.15 及更早的裸 .md 版本文件由 md_history_file_content 兼容直读。
  * 位置取舍：history 放 cache/ 是有意的——后台「清除缓存」只删 tree/search 两文件
  * 不动 history/；但用户手工清空 cache 目录会连带删历史（页面上有提示文案）。
  * $base 参数供测试注入临时目录，线上恒走默认。
@@ -393,6 +396,32 @@ function md_history_meta($rel, $base = null)
     return array('rel' => (string)$rel, 'versions' => $versions);
 }
 
+/**
+ * 版本文件闸门包装（纯函数，可测）：首行校验 MD_BOOT，直访 403 空白；
+ * 程序侧 include 取回原文。内容经 var_export 成合法 PHP 字符串字面量，注入无门。
+ */
+function md_history_gate_wrap($content)
+{
+    return "<?php\n// DirDocs 修订版本数据文件（闸门格式，勿手工编辑）\n"
+        . "if (!defined('MD_BOOT')) { http_response_code(403); exit; }\n"
+        . 'return ' . var_export((string)$content, true) . ";\n";
+}
+
+/** 读版本文件内容：.php 闸门格式 include 取值；v1.15 及更早的裸 .md 直读（升级平滑兼容）。 */
+function md_history_file_content($dir, $f)
+{
+    $path = $dir . '/' . basename((string)$f);
+    if (!is_file($path)) {
+        return false;
+    }
+    if (substr((string)$f, -4) === '.php') {
+        $c = @include $path;                            // 闸门数据文件：return 内容字符串
+        return is_string($c) ? $c : false;
+    }
+    $c = @file_get_contents($path);
+    return $c === false ? false : $c;
+}
+
 /** 归档一次内容：成功返回 true；只读模式/空内容/超 2MB/与最新版相同都安静跳过。 */
 function md_history_archive($rel, $content, $base = null)
 {
@@ -402,16 +431,16 @@ function md_history_archive($rel, $content, $base = null)
     $dir = md_history_doc_dir($rel, $base);
     $meta = md_history_meta($rel, $base);
     if (!empty($meta['versions'])) {
-        $newest = $dir . '/' . $meta['versions'][0]['f'];
-        if (is_file($newest) && (string)@file_get_contents($newest) === $content) {
+        $prev = md_history_file_content($dir, $meta['versions'][0]['f']);
+        if (is_string($prev) && $prev === $content) {
             return false;
         }
     }
     if (!is_dir($dir) && !@mkdir($dir, 0755, true)) {
         return false;
     }
-    $f = gmdate('Ymd_His') . '-' . substr(md5($content), 0, 8) . '.md';
-    if (!md_write_file($dir . '/' . $f, $content)) {
+    $f = gmdate('Ymd_His') . '-' . substr(md5($content), 0, 8) . '.php';
+    if (!md_write_file($dir . '/' . $f, md_history_gate_wrap($content))) {
         return false;
     }
     array_unshift($meta['versions'], array('f' => $f, 't' => time(), 's' => strlen($content)));
@@ -437,14 +466,13 @@ function md_history_list($rel, $base = null)
     return $out;
 }
 
-/** 读版本内容：文件名过严格白名单正则（时间戳-8hex.md）再 basename 收口，杜绝拼接。 */
+/** 读版本内容：文件名过严格白名单正则（时间戳-8hex + .php/.md）再 basename 收口，杜绝拼接。 */
 function md_history_read($rel, $f, $base = null)
 {
-    if (!is_string($f) || preg_match('/^[0-9]{8}_[0-9]{6}-[0-9a-f]{8}\.md$/', $f) !== 1) {
+    if (!is_string($f) || preg_match('/^[0-9]{8}_[0-9]{6}-[0-9a-f]{8}\.(?:php|md)$/', $f) !== 1) {
         return false;
     }
-    $c = @file_get_contents(md_history_doc_dir($rel, $base) . '/' . basename($f));
-    return $c === false ? false : (string)$c;
+    return md_history_file_content(md_history_doc_dir($rel, $base), $f);
 }
 
 function md_history_clear($rel, $base = null)
@@ -801,7 +829,9 @@ function md_config_set($patch)
     $allow = array('site_title', 'site_desc', 'theme', 'mode', 'url_mode', 'home', 'language',
                    'ext_md', 'ext_attach', 'hidden_prefix', 'cache',
                    'show_attach', 'order_prefix', 'admin_pass', 'admin_user', 'admin_totp',
-                   'base_path', 'site_url', 'risk_ignore');
+                   'base_path', 'site_url', 'risk_ignore',
+                   'comments', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass',
+                   'smtp_from', 'smtp_secure', 'notify_email');
     $cfg = md_config_load();
     foreach ($patch as $k => $v) {
         if (in_array($k, $allow, true)) {
@@ -929,6 +959,7 @@ function md_admin_ico($name)
     static $icons = array(
         'home'    => 'house-door',
         'doc'     => 'file-earmark-text',
+        'chat'    => 'chat-square-text',
         'image'   => 'images',
         'db'      => 'database',
         'gear'    => 'gear',
@@ -945,6 +976,7 @@ function md_admin_ico($name)
         'save'    => 'save',
         'list'    => 'list-ul',
         'close'   => 'x-lg',
+        'ok'      => 'check2',
     );
     if (!isset($icons[$name])) {
         return '';
@@ -980,11 +1012,12 @@ function md_admin_site_url($cfg)
 function md_admin_nav_items()
 {
     return array(
-        ''       => array('admin_nav_overview', 'home'),
-        'docs'   => array('admin_nav_docs', 'doc'),
-        'attach' => array('admin_nav_attach', 'image'),
-        'cache'  => array('admin_nav_cache', 'db'),
-        'config' => array('admin_nav_settings', 'gear'),
+        ''         => array('admin_nav_overview', 'home'),
+        'docs'     => array('admin_nav_docs', 'doc'),
+        'comments' => array('admin_nav_comments', 'chat'),
+        'attach'   => array('admin_nav_attach', 'image'),
+        'cache'    => array('admin_nav_cache', 'db'),
+        'config'   => array('admin_nav_settings', 'gear'),
     );
 }
 
@@ -1313,6 +1346,11 @@ function md_admin_home($tree, $cfg)
         $body .= md_risk_html($risk, true);
     } else {
         $body .= '<div class="alert alert-ok">' . md_e(md_t('admin_risk_ok')) . '</div>';
+    }
+
+    // 环境：mermaid 图表库缺失（slim 安装删掉省 3.2MB）时提示后果，需要时按 vendor/README.md 恢复
+    if (!is_file(MD_DIR . '/assets/vendor/mermaid.min.js')) {
+        $body .= '<div class="alert alert-warn">' . md_e(md_t('admin_hard_mermaid_missing')) . '</div>';
     }
 
     // 站点信息
@@ -1900,6 +1938,7 @@ function md_admin_doc_rename($cfg)
             } elseif ($safe === false || $safe !== basename($to)) {
                 $err = md_t('admin_err_target_badname', array('name' => md_e(basename($to))));
             } elseif (@rename($oldAbs, MD_ROOT . '/' . $to)) {
+                @rename(MD_ROOT . '/' . $old . '.cmt.php', MD_ROOT . '/' . $to . '.cmt.php');   // 评论文件跟移（v1.17.0）
                 md_tree_cache_clear();
                 header('Location: ' . md_admin_url('docs', array('saved' => 'renamed')));
                 exit;
@@ -2175,9 +2214,211 @@ function md_admin_doc_delete($cfg)
         header('Location: ' . md_admin_url('docs', array('err' => 'failed')));
         exit;
     }
+    @unlink(MD_ROOT . '/' . $rel . '.cmt.php');     // 评论文件随文档删除（v1.17.0）
     md_tree_cache_clear();
     header('Location: ' . md_admin_url('docs', array('saved' => 'deleted')));
     exit;
+}
+
+// ---------------------------------------------------------------- 评论管理（v1.17.0）
+
+/** 收集全站评论文件：递归内容目录（跳过隐藏/系统/常见大目录），返回文档 rel 列表（已剥 .cmt.php）。 */
+function md_admin_cmt_files($root, $prefix = '', &$out = array())
+{
+    $items = @scandir($root);
+    if ($items === false) {
+        return $out;
+    }
+    foreach ($items as $name) {
+        if ($name === '.' || $name === '..') {
+            continue;
+        }
+        $full = $root . '/' . $name;
+        if (is_link($full)) {
+            continue;
+        }
+        $rel = $prefix === '' ? $name : $prefix . '/' . $name;
+        if (is_dir($full)) {
+            if ($name[0] === '.' || $name === MD_DIRNAME
+                || in_array($name, array('node_modules', 'vendor'), true)) {
+                continue;                           // 隐藏目录 / _dir / 常见大目录
+            }
+            md_admin_cmt_files($full, $rel, $out);
+        } elseif (md_ends_with($name, '.cmt.php')) {
+            $out[] = substr($rel, 0, -8);
+        }
+    }
+    return $out;
+}
+
+/** 一条评论的管理操作按钮（批准/删除）：独立小表单，CSRF 与全站后台同规。 */
+function md_admin_cmt_btns($act, $rel, $id, $label, $ico, $cls)
+{
+    return '<form method="post" action="' . md_e(md_admin_url('comments')) . '" class="d-inline-block">'
+        . md_csrf_field()
+        . '<input type="hidden" name="act" value="' . md_e($act) . '">'
+        . '<input type="hidden" name="d" value="' . md_e($rel) . '">'
+        . '<input type="hidden" name="id" value="' . (int)$id . '">'
+        . '<button class="btn ' . $cls . ' btn-sm" type="submit">' . md_admin_ico($ico) . md_e($label) . '</button>'
+        . '</form>';
+}
+
+/**
+ * 评论管理页：待审队列（批准/删除）+ 已通过（按文档折叠，可删）+ 孤儿文件兜底
+ * （FTP 直接删 .md 不会带走旁边的 .cmt.php，这里对照文档树清理）。批准一条回复时
+ * 触发「通知被回复者」邮件（未配 SMTP 则静默跳过）。
+ */
+function md_admin_comments($tree, $cfg)
+{
+    md_admin_guard();
+    md_csrf_guard();
+
+    $treeMd = isset($tree['md']) && is_array($tree['md']) ? $tree['md'] : array();
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $act = isset($_POST['act']) ? (string)$_POST['act'] : '';
+        if ($act === 'approve' || $act === 'del') {
+            $rel = str_replace('\\', '/', trim(isset($_POST['d']) && is_string($_POST['d']) ? $_POST['d'] : '', '/'));
+            $id = isset($_POST['id']) && ctype_digit((string)$_POST['id']) ? (int)$_POST['id'] : 0;
+            if (isset($treeMd[$rel]) && $id > 0) {
+                $done = md_cmt_txn($rel, function (array $data) use ($act, $id) {
+                    return $act === 'del'
+                        ? md_cmt_remove($data, $id)
+                        : md_cmt_set_status($data, $id, 'approved');
+                });
+                if ($done && $act === 'approve') {
+                    md_cmt_notify_reply_maybe($cfg, $rel, $id);
+                }
+            }
+        } elseif ($act === 'orphan_del') {
+            $rel = str_replace('\\', '/', trim(isset($_POST['d']) && is_string($_POST['d']) ? $_POST['d'] : '', '/'));
+            // 三重保险：后缀恰好 .cmt.php、落点仍在文档根内、当前树里已无对应文档
+            if (md_ends_with($rel, '.cmt.php') && !isset($treeMd[substr($rel, 0, -8)])
+                && md_starts_with(str_replace('\\', '/', dirname(MD_ROOT . '/' . $rel)) . '/',
+                    str_replace('\\', '/', MD_ROOT) . '/')) {
+                @unlink(MD_ROOT . '/' . $rel);
+            }
+        }
+        header('Location: ' . md_admin_url('comments', array('saved' => 'cmt')));
+        exit;
+    }
+
+    $pending = array();
+    $approved = array();
+    foreach ($treeMd as $rel => $info) {
+        if (!is_file(md_cmt_file($rel))) {
+            continue;
+        }
+        $data = md_cmt_load($rel);
+        $title = isset($info['title']) && $info['title'] !== '' ? $info['title'] : md_title_of($rel);
+        foreach ($data['comments'] as $c) {
+            if (!isset($c['status'])) {
+                continue;
+            }
+            if ($c['status'] === 'pending') {
+                $pending[] = array('rel' => $rel, 'title' => $title, 'c' => $c);
+            } elseif ($c['status'] === 'approved') {
+                if (!isset($approved[$rel])) {
+                    $approved[$rel] = array('title' => $title, 'items' => array());
+                }
+                $approved[$rel]['items'][] = $c;
+            }
+        }
+    }
+    $orphans = array();
+    foreach (md_admin_cmt_files(MD_ROOT) as $rel) {
+        if (!isset($treeMd[$rel])) {
+            $orphans[] = $rel;
+        }
+    }
+
+    $body = '<div class="admin-stack">';
+    $saved = isset($_GET['saved']) ? (string)$_GET['saved'] : '';
+    if ($saved === 'cmt') {
+        $body .= '<div class="alert alert-ok">' . md_e(md_t('admin_cmt_flash_ok')) . '</div>';
+    }
+
+    // ---- 待审队列 ----
+    $body .= '<section class="card"><div class="admin-card-head"><h2>'
+        . md_t('admin_cmt_pending', array('n' => count($pending))) . '</h2></div><div class="admin-card-body">';
+    if (count($pending) === 0) {
+        $body .= '<p class="text-muted mb-0">' . md_e(md_t('admin_cmt_none_pending')) . '</p>';
+    } else {
+        foreach ($pending as $i => $p) {
+            $c = $p['c'];
+            $docUrl = md_url_for(md_strip_doc_ext($p['rel'], $cfg), 'doc', $cfg);
+            $body .= '<div class="border-bottom pb-3 mb-3' . ($i === count($pending) - 1 ? ' border-bottom-0 mb-0 pb-0' : '') . '">'
+                . '<div class="small text-muted mb-1">'
+                . '<span class="badge badge-secondary">' . md_e(date('Y-m-d H:i', (int)$c['time'])) . '</span> '
+                . '<b class="text-body">' . md_e((string)$c['author']) . '</b>'
+                . (isset($c['email']) && (string)$c['email'] !== '' ? ' &lt;' . md_e((string)$c['email']) . '&gt;' : '')
+                . ((int)$c['reply_to'] > 0 ? ' · ' . md_e(md_t('cmt_replying', array('name' => '#' . (int)$c['reply_to']))) : '')
+                . '</div>'
+                . '<p class="mb-2" style="white-space:pre-wrap;word-break:break-word">' . md_e((string)$c['body']) . '</p>'
+                . '<div class="d-flex flex-wrap align-items-center justify-content-between">'
+                . '<div class="small text-muted">'
+                . md_e(md_t('admin_cmt_doc')) . ' <a href="' . md_e($docUrl) . '" target="_blank" rel="noopener">'
+                . md_e($p['title']) . '</a></div>'
+                . '<div>' . md_admin_cmt_btns('approve', $p['rel'], (int)$c['id'], md_t('admin_cmt_approve'), 'ok', 'btn-primary')
+                . ' ' . md_admin_cmt_btns('del', $p['rel'], (int)$c['id'], md_t('admin_cmt_delete'), 'trash', 'btn-outline-danger')
+                . '</div></div></div>';
+        }
+    }
+    $body .= '</div></section>';
+
+    // ---- 已通过（按文档折叠） ----
+    $approvedTotal = 0;
+    foreach ($approved as $a) {
+        $approvedTotal += count($a['items']);
+    }
+    $body .= '<section class="card"><div class="admin-card-head"><h2>'
+        . md_t('admin_cmt_approved', array('n' => $approvedTotal)) . '</h2></div><div class="admin-card-body">';
+    if (count($approved) === 0) {
+        $body .= '<p class="text-muted mb-0">' . md_e(md_t('admin_cmt_none_all')) . '</p>';
+    } else {
+        foreach ($approved as $rel => $a) {
+            $docUrl = md_url_for(md_strip_doc_ext($rel, $cfg), 'doc', $cfg);
+            $body .= '<details class="mb-2"><summary class="small">'
+                . '<a href="' . md_e($docUrl) . '" target="_blank" rel="noopener">' . md_e($a['title']) . '</a> '
+                . md_e(md_t('admin_cmt_doc_n', array('n' => count($a['items']))))
+                . '</summary>';
+            foreach ($a['items'] as $c) {
+                $body .= '<div class="d-flex align-items-start border-bottom py-2">'
+                    . '<div class="flex-grow-1 mr-2">'
+                    . '<div class="small text-muted"><b class="text-body">' . md_e((string)$c['author']) . '</b> · '
+                    . md_e(date('Y-m-d H:i', (int)$c['time']))
+                    . ((int)$c['reply_to'] > 0 ? ' · ' . md_e(md_t('cmt_replying', array('name' => '#' . (int)$c['reply_to']))) : '')
+                    . '</div>'
+                    . '<div class="small" style="white-space:pre-wrap;word-break:break-word">' . md_e((string)$c['body']) . '</div>'
+                    . '</div>'
+                    . md_admin_cmt_btns('del', $rel, (int)$c['id'], md_t('admin_cmt_delete'), 'trash', 'btn-outline-danger')
+                    . '</div>';
+            }
+            $body .= '</details>';
+        }
+    }
+    $body .= '</div></section>';
+
+    // ---- 孤儿评论文件 ----
+    if (count($orphans) > 0) {
+        $body .= '<section class="card"><div class="admin-card-head"><h2>'
+            . md_e(md_t('admin_cmt_orphans')) . '</h2></div><div class="admin-card-body">'
+            . '<p class="small text-muted">' . md_e(md_t('admin_cmt_orphan_hint')) . '</p>';
+        foreach ($orphans as $rel) {
+            $body .= '<div class="d-flex align-items-center justify-content-between border-bottom py-2">'
+                . '<code class="small">' . md_e($rel . '.cmt.php') . '</code>'
+                . '<form method="post" action="' . md_e(md_admin_url('comments')) . '" class="d-inline-block">'
+                . md_csrf_field()
+                . '<input type="hidden" name="act" value="orphan_del">'
+                . '<input type="hidden" name="d" value="' . md_e($rel . '.cmt.php') . '">'
+                . '<button class="btn btn-outline-danger btn-sm" type="submit">'
+                . md_admin_ico('trash') . md_e(md_t('admin_cmt_delfile')) . '</button></form>'
+                . '</div>';
+        }
+        $body .= '</div></section>';
+    }
+
+    $body .= '</div>';
+    md_admin_page(md_t('admin_cmt_title'), $body, 'comments');
 }
 
 // ---------------------------------------------------------------- 附件管理
@@ -2401,6 +2642,12 @@ function md_admin_cache($cfg)
             header('Location: ' . md_admin_url('cache', array('saved' => 'clear')));
             exit;
         }
+        if ($act === 'feedback_clear') {
+            @unlink(md_feedback_store_file());          // 投票计数与限流记账都可再生，直接删
+            @unlink(md_feedback_ip_file());
+            header('Location: ' . md_admin_url('cache', array('saved' => 'fbclear')));
+            exit;
+        }
     }
 
     $body = '<div class="admin-stack">';
@@ -2408,6 +2655,7 @@ function md_admin_cache($cfg)
     $flash = array(
         'rebuild' => 'admin_cache_flash_rebuild',
         'clear'   => 'admin_cache_flash_clear',
+        'fbclear' => 'admin_fb_flash_clear',
     );
     if (isset($flash[$saved])) {
         $body .= '<div class="alert alert-ok">' . md_e(md_t($flash[$saved])) . '</div>';
@@ -2451,7 +2699,64 @@ function md_admin_cache($cfg)
         . '<button class="btn btn-danger btn-sm" type="submit">' . md_e(md_t('admin_cache_clear_btn')) . '</button></form>'
         . '</div>'
         . '<p class="form-hint">' . md_e(md_t('admin_cache_hint')) . '</p></div>'
-        . '</section></div>';
+        . '</section>';
+
+    // ---- 文档反馈（v1.16.0）：前台匿名投票的聚合计数。差评多的排前 = 优先修订清单 ----
+    $tree = md_tree_load($cfg);                         // 反馈卡需要文档标题与存在性校验
+    $fbRows = array();
+    foreach (md_feedback_load()['docs'] as $fbRel => $fbC) {
+        if (!isset($tree['md'][$fbRel])) {
+            continue;                                   // 文档已删：不计入（下次任何投票都会顺带剪除）
+        }
+        $fbU = isset($fbC['u']) ? (int)$fbC['u'] : 0;
+        $fbD = isset($fbC['d']) ? (int)$fbC['d'] : 0;
+        if ($fbU === 0 && $fbD === 0) {
+            continue;
+        }
+        $fbRows[] = array('rel' => $fbRel, 'u' => $fbU, 'd' => $fbD);
+    }
+    usort($fbRows, function ($a, $b) {
+        if ($a['d'] !== $b['d']) {
+            return $a['d'] > $b['d'] ? -1 : 1;          // 需改进多者优先——修订价值排序
+        }
+        if ($a['u'] !== $b['u']) {
+            return $a['u'] > $b['u'] ? -1 : 1;
+        }
+        return strcmp($a['rel'], $b['rel']);
+    });
+    $body .= '<section class="card"><div class="admin-card-head"><h2>' . md_e(md_t('admin_fb_title')) . '</h2></div>'
+        . '<div class="admin-card-body"><p class="form-hint">' . md_t('admin_fb_hint') . '</p>';
+    if (!$fbRows) {
+        $body .= '<p class="admin-empty">' . md_e(md_t('admin_fb_empty')) . '</p></div></section>';
+    } else {
+        $body .= '<div class="admin-wrap"><table class="table admin-recent"><thead><tr>'
+            . '<th>' . md_e(md_t('admin_fb_doc')) . '</th>'
+            . '<th>' . md_e(md_t('admin_fb_up')) . '</th>'
+            . '<th>' . md_e(md_t('admin_fb_down')) . '</th>'
+            . '<th class="admin-col-act">' . md_e(md_t('admin_th_actions')) . '</th></tr></thead><tbody>';
+        foreach (array_slice($fbRows, 0, 10) as $fbR) {
+            $fbTitle = isset($tree['md'][$fbR['rel']]['title']) && (string)$tree['md'][$fbR['rel']]['title'] !== ''
+                ? (string)$tree['md'][$fbR['rel']]['title']
+                : md_display_name(md_strip_doc_ext($fbR['rel'], $cfg), $cfg);
+            $body .= '<tr><td><a href="' . md_e(md_url_for(md_strip_doc_ext($fbR['rel'], $cfg), 'doc', $cfg))
+                . '" target="_blank" rel="noopener">' . md_e($fbTitle) . '</a>'
+                . '<div class="admin-dim admin-path">' . md_e($fbR['rel']) . '</div></td>'
+                . '<td class="admin-nowrap">' . (int)$fbR['u'] . '</td>'
+                . '<td class="admin-nowrap">' . (int)$fbR['d'] . '</td>'
+                . '<td class="admin-col-act"><span class="admin-actions">'
+                . '<a class="btn btn-ghost btn-sm" href="' . md_e(md_admin_url('edit', array('f' => $fbR['rel']))) . '">'
+                . md_admin_ico('pencil') . md_e(md_t('admin_edit')) . '</a></span></td></tr>';
+        }
+        $body .= '</tbody></table></div>'
+            . '<div class="admin-actions-row admin-actions-row-tight">'
+            . '<form method="post" action="' . md_e(md_admin_url('cache')) . '"'
+            . ' data-confirm="' . md_e(md_t('admin_fb_clear_confirm_js')) . '">'
+            . md_csrf_field()
+            . '<input type="hidden" name="cache_do" value="feedback_clear">'
+            . '<button class="btn btn-danger btn-sm" type="submit">' . md_e(md_t('admin_fb_clear')) . '</button></form>'
+            . '</div></section>';
+    }
+    $body .= '</div>';
     md_admin_page(md_t('admin_cache_title'), $body, 'cache');
 }
 
@@ -2532,6 +2837,29 @@ function md_admin_settings($cfg)
             } else {
                 $msg = '<div class="alert alert-danger">' . md_e(md_t('admin_err_ro_save')) . '</div>';
             }
+        } elseif ($act === 'cmt') {
+            // 评论与通知（v1.17.0）：SMTP 密码留空 = 保留已存值（表单回显不回传明文）
+            $patch = array(
+                'comments'     => !empty($_POST['comments']),
+                'notify_email' => isset($_POST['notify_email']) ? trim((string)$_POST['notify_email']) : '',
+                'smtp_host'    => isset($_POST['smtp_host']) ? trim((string)$_POST['smtp_host']) : '',
+                'smtp_port'    => isset($_POST['smtp_port']) ? trim((string)$_POST['smtp_port']) : '465',
+                'smtp_user'    => isset($_POST['smtp_user']) ? trim((string)$_POST['smtp_user']) : '',
+                'smtp_pass'    => isset($_POST['smtp_pass']) ? (string)$_POST['smtp_pass'] : '',
+                'smtp_from'    => isset($_POST['smtp_from']) ? trim((string)$_POST['smtp_from']) : '',
+                'smtp_secure'  => isset($_POST['smtp_secure']) ? (string)$_POST['smtp_secure'] : '',
+            );
+            if (!in_array($patch['smtp_secure'], array('', 'ssl', 'none'), true)) {
+                $patch['smtp_secure'] = '';
+            }
+            if ($patch['smtp_pass'] === '') {
+                unset($patch['smtp_pass']);
+            }
+            if (md_config_set($patch)) {
+                header('Location: ' . md_admin_url('config', array('saved' => 'cmt')));
+                exit;
+            }
+            $msg = '<div class="alert alert-danger">' . md_e(md_t('admin_err_ro_save')) . '</div>';
         } elseif ($act === 'totp_setup') {
             // 第一步：生成密钥只进会话——用户提交一个有效动态码验明设备可用后才落盘，
             // 防止扫码失败/抄错密钥把自己锁死在门外。已启用时拒绝直接换绑：
@@ -2585,7 +2913,8 @@ function md_admin_settings($cfg)
     $body = '<div class="admin-stack">' . $msg;
     $saved = isset($_GET['saved']) ? (string)$_GET['saved'] : '';
     $flash = array('site' => 'admin_flash_site', 'user' => 'admin_flash_user', 'pass' => 'admin_flash_pass',
-                   'totp_on' => 'admin_flash_totp_on', 'totp_off' => 'admin_flash_totp_off');
+                   'totp_on' => 'admin_flash_totp_on', 'totp_off' => 'admin_flash_totp_off',
+                   'cmt' => 'admin_flash_cmt');
     if (isset($flash[$saved])) {
         $body .= '<div class="alert alert-ok">' . md_e(md_t($flash[$saved])) . '</div>';
     }
@@ -2673,6 +3002,43 @@ function md_admin_settings($cfg)
         . '<div class="admin-actions-row"><button class="btn btn-primary" type="submit">' . md_e(md_t('admin_save_settings')) . '</button></div>'
         . '</form></div></section>';
 
+    // ---- 评论与通知卡（v1.17.0）：随包休眠——SMTP 主机不填则零外联，一切照旧 ----
+    $secOpts = '<option value=""' . ((string)$cfg['smtp_secure'] === '' ? ' selected' : '') . '>' . md_e(md_t('admin_smtp_auto')) . '</option>'
+        . '<option value="ssl"' . ((string)$cfg['smtp_secure'] === 'ssl' ? ' selected' : '') . '>' . md_e(md_t('admin_smtp_ssl')) . '</option>'
+        . '<option value="none"' . ((string)$cfg['smtp_secure'] === 'none' ? ' selected' : '') . '>' . md_e(md_t('admin_smtp_none')) . '</option>';
+    $body .= '<section class="card"><div class="admin-card-head"><h2>' . md_e(md_t('admin_st_cmt_title')) . '</h2></div>'
+        . '<div class="admin-card-body"><form method="post" action="' . md_e(md_admin_url('config')) . '">'
+        . md_csrf_field()
+        . '<input type="hidden" name="set_do" value="cmt">'
+        . '<div class="admin-checks mb-2">'
+        . '<label><input type="checkbox" name="comments" value="1"' . (!empty($cfg['comments']) ? ' checked' : '') . '>'
+        . md_e(md_t('admin_kv_comments')) . '</label>'
+        . '</div>'
+        . '<div class="admin-grid">'
+        . '<div class="field"><label for="cne">' . md_e(md_t('admin_kv_notify')) . '</label>'
+        . '<input class="input" type="email" id="cne" name="notify_email" value="' . md_e($cfg['notify_email']) . '">'
+        . '<div class="form-hint">' . md_e(md_t('admin_kv_notify_hint')) . '</div></div>'
+        . '</div>'
+        . '<h3 class="admin-sub">' . md_e(md_t('admin_st_cmt_smtp')) . '</h3>'
+        . '<div class="admin-grid">'
+        . '<div class="field"><label for="csh">' . md_e(md_t('admin_kv_smtp_host')) . '</label>'
+        . '<input class="input" type="text" id="csh" name="smtp_host" value="' . md_e($cfg['smtp_host']) . '" placeholder="smtp.example.com"></div>'
+        . '<div class="field"><label for="csport">' . md_e(md_t('admin_kv_smtp_port')) . '</label>'
+        . '<input class="input" type="text" id="csport" name="smtp_port" value="' . md_e($cfg['smtp_port']) . '"></div>'
+        . '<div class="field"><label for="csu">' . md_e(md_t('admin_kv_smtp_user')) . '</label>'
+        . '<input class="input" type="text" id="csu" name="smtp_user" value="' . md_e($cfg['smtp_user']) . '" autocomplete="off"></div>'
+        . '<div class="field"><label for="cspp">' . md_e(md_t('admin_kv_smtp_pass')) . '</label>'
+        . '<input class="input" type="password" id="cspp" name="smtp_pass" value="" autocomplete="new-password">'
+        . '<div class="form-hint">' . md_e(md_t('admin_kv_smtp_pass_keephint')) . '</div></div>'
+        . '<div class="field"><label for="csf">' . md_e(md_t('admin_kv_smtp_from')) . '</label>'
+        . '<input class="input" type="email" id="csf" name="smtp_from" value="' . md_e($cfg['smtp_from']) . '"></div>'
+        . '<div class="field"><label for="cssec">' . md_e(md_t('admin_kv_smtp_secure')) . '</label>'
+        . '<select class="select" id="cssec" name="smtp_secure">' . $secOpts . '</select></div>'
+        . '</div>'
+        . '<p class="form-hint">' . md_e(md_t('admin_st_cmt_hint')) . '</p>'
+        . '<div class="admin-actions-row"><button class="btn btn-primary" type="submit">' . md_e(md_t('admin_save_settings')) . '</button></div>'
+        . '</form></div></section>';
+
     // ---- pretty 模式伪静态规则卡（沿用含 $uri/ 坑提示的旧文案） ----
     if ($cfg['url_mode'] === 'pretty') {
         // 第二段规则是安全边界：svg/md/markdown/txt 这类"可执行内容"后缀即使真实文件
@@ -2690,6 +3056,22 @@ function md_admin_settings($cfg)
             . '<pre class="admin-code">' . md_e($rules) . '</pre>'
             . '</div></section>';
     }
+
+    // ---- 服务器加固卡（v1.16.0）：_dir 整目录拒绝直访。两种路由模式都需要（不只 pretty）：
+    // 程序唯一执行面是 index.php，_dir 里的缓存/修订历史/配置不应被 Web 服务器直接吐出。
+    // Apache 已由随程序自动生成/补种的 _dir/.htaccess 覆盖；这里给 Nginx 一条可直接粘贴的规则 ----
+    $hardBase = md_base_path($cfg);
+    $hardPrefix = (is_string($hardBase) && $hardBase !== '' && $hardBase !== false) ? rtrim($hardBase, '/') : '';
+    $hardNginx = '# Nginx：_dir 目录整体禁止直访（与路由模式无关；安装子目录时按实际前缀调整）' . "\n"
+        . 'location ^~ ' . $hardPrefix . '/_dir/ {' . "\n    return 404;\n}";
+    $body .= '<section class="card"><div class="admin-card-head"><h2>' . md_e(md_t('admin_hard_title')) . '</h2></div>'
+        . '<div class="admin-card-body">'
+        . '<p>' . md_t('admin_hard_hint') . '</p>'
+        . (is_file(MD_DIR . '/.htaccess')
+            ? '<p class="form-hint">' . md_t('admin_hard_htaccess_ok') . '</p>'
+            : '<div class="alert alert-warn">' . md_e(md_t('admin_hard_htaccess_ro')) . '</div>')
+        . '<pre class="admin-code">' . md_e($hardNginx) . '</pre>'
+        . '</div></section>';
 
     // ---- 修改账号 ----
     $body .= '<section class="card"><div class="admin-card-head"><h2>' . md_e(md_t('admin_user_card')) . '</h2></div>'
@@ -2823,6 +3205,9 @@ function md_admin_dispatch($cfg)
             break;
         case 'docs':
             md_admin_docs($tree, $cfg);
+            break;
+        case 'comments':
+            md_admin_comments($tree, $cfg);
             break;
         case 'new':
         case 'edit':

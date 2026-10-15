@@ -226,10 +226,19 @@ function md_bylines_html($docRel, $contentHtml, $abs = '')
     return $html;
 }
 
-/** 反馈胶囊（pager 之前）：点击行为全部在 builtin.js（本地记忆，可取消）。 */
+/**
+ * 反馈胶囊（pager 之前）：本地记忆 + 匿名计数上报（builtin.js 接管，上报失败静默回落本地）。
+ * data-fb-token 是双提交 CSRF 令牌（值同时落在 HttpOnly Cookie，POST 时 hash_equals 比对）；
+ * 只读模式没有端点，胶囊整个不渲染——「看起来能投票实际收不到」是误导性 UX。
+ */
 function md_feedback_html($docRel)
 {
-    return '<div class="md-feedback" data-doc-rel="' . md_e($docRel) . '">'
+    if (MD_READONLY) {
+        return '';
+    }
+    $tk = md_feedback_token();
+    return '<div class="md-feedback" data-doc-rel="' . md_e($docRel) . '"'
+        . ' data-fb-url="?a=feedback" data-fb-token="' . md_e($tk) . '">'
         . '<span class="md-feedback-q">' . md_e(md_t('feedback_q')) . '</span>'
         . '<div class="feedback-pill">'
         . '<button type="button" class="feedback-btn" data-md-feedback="up" title="' . md_e(md_t('feedback_up')) . '" aria-label="' . md_e(md_t('feedback_up')) . '"><i class="bi bi-hand-thumbs-up" aria-hidden="true"></i></button>'
@@ -555,12 +564,34 @@ function md_show_search($tree, $cfg)
     md_page($ctx);
 }
 
+/** 有更新的月份清单（纯函数，可测）：非草稿文档 mtime 的 Y-m 去重集合，新的月份在前。 */
+function md_recent_months(array $items)
+{
+    $out = array();
+    foreach ($items as $info) {
+        if (!empty($info['draft'])) {
+            continue;
+        }
+        $m = date('Y-m', (int)$info['mtime']);
+        $out[$m] = true;
+    }
+    $months = array_keys($out);
+    rsort($months);
+    return $months;
+}
+
 function md_show_recent($tree, $cfg)
 {
+    // 按月浏览（v1.16.0）：?a=recent&ym=YYYY-MM 是同一份数据的月度切片；非法 ym 一律视为全部
+    $ym = isset($_GET['ym']) ? (string)$_GET['ym'] : '';
+    if (preg_match('/^\d{4}-(?:0[1-9]|1[0-2])$/', $ym) !== 1) {
+        $ym = '';
+    }
+    $title = $ym !== '' ? md_t('recent_ym_title', array('ym' => $ym)) : md_t('recent_title');
     $ctx = array();
     $ctx['cfg'] = $cfg;
-    $ctx['page_title'] = md_t('recent_title');
-    $ctx['breadcrumbs'] = md_render_breadcrumbs('', $cfg, md_t('recent_title'));
+    $ctx['page_title'] = $title;
+    $ctx['breadcrumbs'] = md_render_breadcrumbs('', $cfg, $title);
     $ctx['nav_html'] = md_render_nav($tree, $cfg, '');
     $ctx['toc_html'] = '';
     $ctx['risk_html'] = md_risk_html(md_exec_risk_files(MD_ROOT, $cfg), md_is_admin());
@@ -570,16 +601,42 @@ function md_show_recent($tree, $cfg)
     uasort($items, function ($a, $b) {
         return ($b['mtime'] - $a['mtime']);
     });
+    $months = md_recent_months($items);
+
+    $html = '<h1>' . md_e($title) . '</h1>';
+
+    // 月份导航：全部 + 有更新的月份（最多展示最近 12 个月，当前项实心不可点）。
+    // 全部视图同样要列出月份链接——只给「相邻月」会让全部视图无路可走（v1.16.0 浏览器实测抓到）
+    if (count($months) > 1 || $ym !== '') {
+        $html .= '<nav class="md-ymnav" aria-label="' . md_e(md_t('recent_ym_nav_aria')) . '">';
+        $html .= $ym === ''
+            ? '<span class="md-ym-on">' . md_e(md_t('recent_ym_all')) . '</span>'
+            : '<a href="?a=recent">' . md_e(md_t('recent_ym_all')) . '</a>';
+        foreach (array_slice($months, 0, 12) as $m) {
+            if ($m === $ym) {
+                $html .= '<span class="md-ym-on">' . md_e($m) . '</span>';
+            } else {
+                $html .= '<a href="?a=recent&amp;ym=' . md_e($m) . '">' . md_e($m) . '</a>';
+            }
+        }
+        $html .= '</nav>';
+    }
 
     $limit = 50;
-    $html = '<h1>' . md_e(md_t('recent_title')) . '</h1>';
-    if (!$items) {
-        $html .= '<p><em>' . md_e(md_t('recent_empty')) . '</em></p>';
+    $shown = 0;
+    $total = 0;
+    foreach ($items as $rel => $info) {
+        if (!empty($info['draft']) || ($ym !== '' && date('Y-m', (int)$info['mtime']) !== $ym)) {
+            continue;
+        }
+        $total++;
+    }
+    if ($total === 0) {
+        $html .= '<p><em>' . md_e($ym !== '' ? md_t('recent_ym_empty', array('ym' => $ym)) : md_t('recent_empty')) . '</em></p>';
     } else {
         $html .= '<ul class="md-recent">';
-        $n = 0;
         foreach ($items as $rel => $info) {
-            if (!empty($info['draft'])) {
+            if (!empty($info['draft']) || ($ym !== '' && date('Y-m', (int)$info['mtime']) !== $ym)) {
                 continue;                           // 草稿不进最近更新（v1.15.0）
             }
             $url = md_url_for(md_strip_doc_ext($rel, $cfg), 'doc', $cfg);
@@ -587,14 +644,14 @@ function md_show_recent($tree, $cfg)
             $html .= '<li><span class="md-rdate">' . md_e(date('Y-m-d H:i', $mtime)) . '</span>'
                 . '<a href="' . md_e($url) . '">' . md_e(md_title_of($rel)) . '</a>'
                 . '<span class="md-rpath">' . md_e($rel) . '</span></li>';
-            $n++;
-            if ($n >= $limit) {
+            $shown++;
+            if ($shown >= $limit) {
                 break;
             }
         }
         $html .= '</ul>';
-        if ($n < count($items)) {
-            $html .= '<p class="md-hint">' . md_e(md_t('recent_limit', array('n' => $limit, 'total' => count($items)))) . '</p>';
+        if ($shown < $total) {
+            $html .= '<p class="md-hint">' . md_e(md_t('recent_limit', array('n' => $limit, 'total' => $total))) . '</p>';
         }
     }
     $ctx['content_html'] = $html;
@@ -723,6 +780,9 @@ function md_show_doc($docRel, $tree, $cfg, $forceDirRel = null)
     $ctx['content_html'] = $html;
     $ctx['bylines_html'] = md_bylines_html($docRel, $html, $abs);    // 阅读时长 + 相对更新时间
     $ctx['feedback_html'] = md_feedback_html($docRel);               // 反馈胶囊（builtin.js 接管）
+    // 评论区块（v1.17.0）：md_feedback_resolve_rel 兼作树键解析——草稿/已删文档返回 false 整块不渲染，
+    // 评论面与可见面/投票面口径一致
+    $ctx['comments_html'] = md_cmt_html(md_feedback_resolve_rel($docRel, $tree, $cfg), $cfg);
     $ctx['edit_url'] = md_admin_url('edit', array('f' => $docRel));  // 「编辑此页」（admin_pass 非空才显示）
     $ctx['pager_html'] = md_pager_html($children, $docRel, $cfg);
     $ctx['attach_html'] = md_attach_html($children, $cfg);
@@ -887,6 +947,9 @@ function md_exec_risk_files($root, $cfg, $prefix = '', &$out = array())
             if ($prefix === '' && $name === 'index.php') {
                 continue;                               // 程序入口，唯一执行面
             }
+            if (md_ends_with($name, '.cmt.php')) {
+                continue;                               // 评论数据文件（v1.17.0）：MD_BOOT 执行锁自防护，非用户上传
+            }
             $ext = md_ext($name);
             if (in_array($ext, $dangerExt, true) && !md_risk_ignored($rel, $cfg)) {
                 $out[] = $rel;
@@ -1029,6 +1092,839 @@ function md_send_rss($cfg)
     }
     echo md_rss_xml($cfg, $origin, md_rss_entries(md_tree_load($cfg), $cfg));
     exit;
+}
+
+// ---------------------------------------------------------------- 反馈计数（v1.16.0）
+//
+// 前台「这篇文档有帮助吗」胶囊的服务端接线：匿名 POST 计数，目的只有一个——
+// 让后台看得见哪些文档差评多（= 下一批该修订的文档清单）。
+// 隐私边界：IP 只以 md5 哈希进当日限流记账，原文不落盘；计数文件只存聚合数与投票者哈希。
+
+/** 计数文件：{docs:{<树键rel>:{u:n,d:n,v:{<投票者哈希>:'u'|'d'}}}}；v 是对账账本（取消/切换用）。 */
+function md_feedback_store_file()
+{
+    return MD_DIR . '/cache/feedback.json';
+}
+
+/** 当日限流记账：{day:'YYYY-MM-DD',ips:{<投票者哈希>:n}}；只保留当天，文件自然不会膨胀。 */
+function md_feedback_ip_file()
+{
+    return MD_DIR . '/cache/feedback_ip.json';
+}
+
+/** 投票者哈希：IP 原文绝不入盘。 */
+function md_feedback_voter()
+{
+    return md5(isset($_SERVER['REMOTE_ADDR']) ? (string)$_SERVER['REMOTE_ADDR'] : '');
+}
+
+/**
+ * 双提交 CSRF 令牌：值同时落在 HttpOnly Cookie 与胶囊 data 属性，POST 时 hash_equals 比对。
+ * 复用搜索排序 Cookie 的 header() 写法——setcookie 数组签名是 PHP 7.3+，这里要兼容 7.1。
+ */
+function md_feedback_token()
+{
+    $tk = isset($_COOKIE['dd_fbt']) && is_string($_COOKIE['dd_fbt']) ? $_COOKIE['dd_fbt'] : '';
+    if (preg_match('/^[0-9a-f]{32}$/', $tk) !== 1) {
+        $tk = bin2hex(random_bytes(16));
+        if (!headers_sent()) {
+            $base = md_base_path(md_config_load());
+            $path = ($base === '' || $base === false) ? '/' : rtrim($base, '/') . '/';
+            header('Set-Cookie: dd_fbt=' . $tk . '; Max-Age=31536000; Expires='
+                . gmdate('D, d M Y H:i:s \G\M\T', time() + 31536000) . '; Path=' . $path
+                . '; HttpOnly; SameSite=Lax', false);
+        }
+    }
+    return $tk;
+}
+
+function md_feedback_load()
+{
+    $f = md_feedback_store_file();
+    $d = is_file($f) ? json_decode((string)md_read_text($f), true) : null;
+    return is_array($d) && isset($d['docs']) && is_array($d['docs'])
+        ? $d : array('docs' => array());
+}
+
+function md_feedback_save(array $data)
+{
+    return md_write_file(md_feedback_store_file(),
+        json_encode($data, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP));
+}
+
+function md_feedback_ip_load()
+{
+    $f = md_feedback_ip_file();
+    $d = is_file($f) ? json_decode((string)md_read_text($f), true) : null;
+    return is_array($d) && isset($d['ips']) && is_array($d['ips'])
+        ? array('day' => isset($d['day']) ? (string)$d['day'] : '', 'ips' => $d['ips'])
+        : array('day' => '', 'ips' => array());
+}
+
+function md_feedback_ip_save(array $data)
+{
+    return md_write_file(md_feedback_ip_file(),
+        json_encode($data, JSON_UNESCAPED_UNICODE));
+}
+
+/**
+ * 投票对账（纯函数，可测）：按投票者账本先撤销旧票再记新票，切换/取消都守恒。
+ * $vcap 是单文档投票者账本上限：超出后仍计数但不记账（该投票者的后续取消无法对账，
+ * 极热文档可接受微量通胀）——防的是账本无限膨胀，不是准确性。
+ * 返回新的 docs 数组；输入原数组不被修改。
+ */
+function md_feedback_apply(array $docs, $rel, $state, $voter, $vcap = 2000)
+{
+    if (!in_array($state, array('up', 'down', ''), true)) {
+        return $docs;
+    }
+    $cur = isset($docs[$rel]) && is_array($docs[$rel]) ? $docs[$rel] : array();
+    $u = isset($cur['u']) ? (int)$cur['u'] : 0;
+    $d = isset($cur['d']) ? (int)$cur['d'] : 0;
+    $v = isset($cur['v']) && is_array($cur['v']) ? $cur['v'] : array();
+    $old = isset($v[$voter]) && in_array($v[$voter], array('up', 'down'), true) ? $v[$voter] : '';
+    if ($old === 'up' && $u > 0) {
+        $u--;
+    }
+    if ($old === 'down' && $d > 0) {
+        $d--;
+    }
+    if ($state === 'up') {
+        $u++;
+    } elseif ($state === 'down') {
+        $d++;
+    }
+    if ($state === '') {
+        unset($v[$voter]);
+    } elseif (isset($v[$voter]) || count($v) < $vcap) {
+        $v[$voter] = $state;
+    }
+    $docs[$rel] = array('u' => $u, 'd' => $d, 'v' => $v);
+    return $docs;
+}
+
+/** 当日限流（纯函数，可测）：跨天自动清零；达到 $max 当日拒绝。返回 array(是否放行, 新数据)。 */
+function md_feedback_daily_hit(array $data, $voter, $today, $max = 60)
+{
+    $day = isset($data['day']) ? (string)$data['day'] : '';
+    $ips = isset($data['ips']) && is_array($data['ips']) ? $data['ips'] : array();
+    if ($day !== (string)$today) {
+        $ips = array();
+    }
+    $n = isset($ips[$voter]) ? (int)$ips[$voter] : 0;
+    if ($n >= $max) {
+        return array(false, array('day' => (string)$today, 'ips' => $ips));
+    }
+    $ips[$voter] = $n + 1;
+    return array(true, array('day' => (string)$today, 'ips' => $ips));
+}
+
+/**
+ * rel → 树键解析（纯函数，可测）：胶囊里的 docRel 不带后缀，按白名单后缀补全后查树；
+ * 文档不存在或为草稿一律拒绝（草稿对访客不可见，投票面必须同样不可见）。返回树键或 false。
+ */
+function md_feedback_resolve_rel($rel, $tree, $cfg)
+{
+    $rel = str_replace('\\', '/', trim((string)$rel, '/'));
+    if ($rel === '' || md_starts_with($rel, '_dir')) {
+        return false;
+    }
+    $treeMd = isset($tree['md']) && is_array($tree['md']) ? $tree['md'] : array();
+    $candidates = in_array(md_ext($rel), $cfg['ext_md'], true) ? array($rel) : array();
+    foreach ($cfg['ext_md'] as $e) {
+        $candidates[] = $rel . '.' . $e;
+    }
+    foreach ($candidates as $c) {
+        if (isset($treeMd[$c])) {
+            return empty($treeMd[$c]['draft']) ? $c : false;
+        }
+    }
+    return false;
+}
+
+/**
+ * 反馈投票端点：POST ?a=feedback，参数 p=<docRel> v=up|down|（空=取消）t=<双提交令牌>。
+ * JSON 应答；前端失败一律静默回落本地记忆（内网/断网环境胶囊照常工作，只是不入库）。
+ */
+function md_send_feedback($tree, $cfg)
+{
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    header('X-Robots-Tag: noindex, nofollow');
+    $md_fb_fail = function ($code) {
+        http_response_code($code);
+        echo '{"ok":false}';
+        exit;
+    };
+    if (MD_READONLY || $_SERVER['REQUEST_METHOD'] !== 'POST') {
+        $md_fb_fail(405);
+    }
+    $state = isset($_POST['v']) ? (string)$_POST['v'] : '';
+    if ($state !== 'up' && $state !== 'down' && $state !== '') {
+        $md_fb_fail(400);
+    }
+    $tk = isset($_POST['t']) ? (string)$_POST['t'] : '';
+    $ck = isset($_COOKIE['dd_fbt']) && is_string($_COOKIE['dd_fbt']) ? $_COOKIE['dd_fbt'] : '';
+    if ($tk === '' || $ck === '' || !hash_equals($ck, $tk)) {
+        $md_fb_fail(403);
+    }
+    $key = md_feedback_resolve_rel(isset($_POST['p']) ? (string)$_POST['p'] : '', $tree, $cfg);
+    if ($key === false) {
+        $md_fb_fail(404);
+    }
+    $voter = md_feedback_voter();
+    list($ok, $ipData) = md_feedback_daily_hit(md_feedback_ip_load(), $voter, date('Y-m-d'));
+    if (!$ok) {
+        $md_fb_fail(429);
+    }
+    $data = md_feedback_load();
+    $docs = md_feedback_apply($data['docs'], $key, $state, $voter);
+    // 顺手剪枝：文档已删除/更名后旧条目不再保留（键即树键，直查即判）
+    $treeMd = isset($tree['md']) && is_array($tree['md']) ? $tree['md'] : array();
+    $data['docs'] = array();
+    foreach ($docs as $rel => $c) {
+        if (isset($treeMd[$rel]) && ((isset($c['u']) && (int)$c['u'] > 0) || (isset($c['d']) && (int)$c['d'] > 0))) {
+            $data['docs'][$rel] = $c;
+        }
+    }
+    md_feedback_save($data);
+    md_feedback_ip_save($ipData);
+    echo '{"ok":true}';
+    exit;
+}
+
+// ================================================================= 评论（v1.17.0）
+//
+// 数据放文档旁：<文档名>.cmt.php，首行是 PHP 执行锁（MD_BOOT 闸门），锁后是 JSON——
+// 站点能跑就等于 PHP 能执行，这把锁不依赖任何服务器配置（config.php / cache/*.php 同惯例）。
+// 写路径全程 flock 持锁事务（锁文件在 _dir/cache/cmt_locks/，按文档哈希分锁），数据文件经
+// md_write_file 原子替换，无锁读者永远不会读到半截文件。评论一律先进 pending，后台「评论」
+// 页批准后才对访客可见；MD_READONLY 全链路关闭。
+
+/** 执行锁门行：直接 HTTP 访问时 MD_BOOT 未定义，PHP 执行即 403 退出；读取方按本行长度截断。 */
+function md_cmt_gate()
+{
+    return '<?php /* DirDocs comment store; direct web access is denied. */'
+        . ' if (!defined("MD_BOOT")) { http_response_code(403); exit; } ?>';
+}
+
+function md_cmt_file($rel)
+{
+    return MD_ROOT . '/' . $rel . '.cmt.php';
+}
+
+function md_cmt_fresh()
+{
+    return array('next_id' => 1, 'comments' => array());
+}
+
+/**
+ * 解析评论数据（纯函数，可测）：门行不符或 JSON 坏一律 null——渲染按空数据处理，
+ * 写入（事务）拒绝覆盖，宁可停摆也不吞用户数据。
+ */
+function md_cmt_parse($raw)
+{
+    if (!is_string($raw) || $raw === '') {
+        return null;
+    }
+    $gate = md_cmt_gate();
+    if (substr($raw, 0, strlen($gate)) !== $gate) {
+        return null;
+    }
+    $d = json_decode(substr($raw, strlen($gate)), true);
+    if (!is_array($d) || !isset($d['comments']) || !is_array($d['comments'])) {
+        return null;
+    }
+    $d['next_id'] = isset($d['next_id']) ? (int)$d['next_id'] : 1;
+    return $d;
+}
+
+/** 渲染侧读取：文件缺失/损坏按空数据处理（只读不写，无破坏面）。 */
+function md_cmt_load($rel)
+{
+    $raw = @file_get_contents(md_cmt_file($rel));
+    if ($raw === false) {
+        return md_cmt_fresh();
+    }
+    $d = md_cmt_parse($raw);
+    return is_array($d) ? $d : md_cmt_fresh();
+}
+
+/**
+ * 持锁事务：$fn(数据) 返回新数据数组则原子写回，返回非数组则放弃修改（返回 true 仍算成功）。
+ * 锁文件放 _dir/cache/cmt_locks/<md5(rel)>.lock——文档目录只留 .cmt.php 一个文件（数据随文档走），
+ * 锁属可再生基础设施归 _dir。$root 可注入（测试用）。
+ */
+function md_cmt_txn($rel, $fn, $root = null)
+{
+    $base = $root === null ? MD_ROOT : $root;
+    $lockDir = ($root === null ? MD_DIR : $root . '/_dir') . '/cache/cmt_locks';
+    if (!is_dir($lockDir) && !@mkdir($lockDir, 0755, true)) {
+        return false;
+    }
+    $fp = @fopen($lockDir . '/' . md5($rel) . '.lock', 'c');
+    if ($fp === false) {
+        return false;
+    }
+    $done = false;
+    if (flock($fp, LOCK_EX)) {
+        $raw = @file_get_contents($base . '/' . $rel . '.cmt.php');
+        if ($raw === false) {
+            $data = md_cmt_fresh();
+        } else {
+            $data = md_cmt_parse($raw);
+        }
+        if (!is_array($data)) {
+            $done = false;                          // 文件存在但损坏：拒绝盲写覆盖
+        } else {
+            $new = call_user_func($fn, $data);
+            if (is_array($new)) {
+                $done = md_write_file($base . '/' . $rel . '.cmt.php',
+                    md_cmt_gate() . json_encode($new, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+            } else {
+                $done = true;                       // 无修改视作事务成功
+            }
+        }
+        flock($fp, LOCK_UN);
+    }
+    fclose($fp);
+    return $done;
+}
+
+/** 字符长度（mbstring 不保证存在，引擎同款降级思路）。 */
+function md_cmt_strlen($s)
+{
+    if (function_exists('mb_strlen')) {
+        return (int)mb_strlen($s, 'UTF-8');
+    }
+    $n = preg_match_all('/./us', $s);
+    return $n === false ? strlen($s) : (int)$n;
+}
+
+/** 按字符截断（通知邮件预览用）。 */
+function md_cmt_cut($s, $n)
+{
+    if (md_cmt_strlen($s) <= $n) {
+        return $s;
+    }
+    if (function_exists('mb_substr')) {
+        return mb_substr($s, 0, $n, 'UTF-8') . '…';
+    }
+    return substr($s, 0, $n * 2) . '…';
+}
+
+/**
+ * 评论字段校验（纯函数，可测）：返回规范化数组或 false。邮箱选填；
+ * UTF-8 不合法直接拒；正文剥掉控制字符（换行/制表除外），上限 2000 字。
+ */
+function md_cmt_validate($author, $email, $body)
+{
+    $author = trim((string)$author);
+    $email = trim((string)$email);
+    $body = trim((string)$body);
+    foreach (array($author, $email, $body) as $v) {
+        if ($v !== '' && !preg_match('//u', $v)) {
+            return false;
+        }
+    }
+    $body = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $body);
+    $author = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $author);
+    if ($author === '' || md_cmt_strlen($author) > 40) {
+        return false;
+    }
+    if ($body === '' || md_cmt_strlen($body) > 2000) {
+        return false;
+    }
+    if ($email !== ''
+        && (md_cmt_strlen($email) > 254 || filter_var($email, FILTER_VALIDATE_EMAIL) === false)) {
+        return false;
+    }
+    return array('author' => $author, 'email' => $email, 'body' => $body);
+}
+
+/** 回复目标检查（纯函数，可测）：0 = 顶层；否则必须是本篇内已通过的评论 id。 */
+function md_cmt_reply_ok(array $data, $rt)
+{
+    $rt = (int)$rt;
+    if ($rt <= 0) {
+        return true;
+    }
+    foreach ($data['comments'] as $c) {
+        if ((int)$c['id'] === $rt && isset($c['status']) && $c['status'] === 'approved') {
+            return true;
+        }
+    }
+    return false;
+}
+
+/** 追加（纯函数，可测）：分配自增 id，pending 入队。$cap 防单文档无限膨胀。 */
+function md_cmt_add(array $data, array $cmt, $cap = 1000)
+{
+    if (count($data['comments']) >= (int)$cap) {
+        return null;
+    }
+    $cmt['id'] = (int)$data['next_id'];
+    $data['next_id'] = (int)$data['next_id'] + 1;
+    $data['comments'][] = $cmt;
+    return $data;
+}
+
+/** 状态变更（纯函数，可测）：目标不存在原样返回。 */
+function md_cmt_set_status(array $data, $id, $status)
+{
+    foreach ($data['comments'] as $i => $c) {
+        if ((int)$c['id'] === (int)$id) {
+            $data['comments'][$i]['status'] = (string)$status;
+            return $data;
+        }
+    }
+    return $data;
+}
+
+/** 删除（纯函数，可测）：目标不存在原样返回。 */
+function md_cmt_remove(array $data, $id)
+{
+    foreach ($data['comments'] as $i => $c) {
+        if ((int)$c['id'] === (int)$id) {
+            array_splice($data['comments'], $i, 1);
+            return $data;
+        }
+    }
+    return $data;
+}
+
+/** 展示集（纯函数，可测）：仅 approved，追加序即时间序。 */
+function md_cmt_visible(array $data)
+{
+    $out = array();
+    foreach ($data['comments'] as $c) {
+        if (isset($c['status']) && $c['status'] === 'approved') {
+            $out[] = $c;
+        }
+    }
+    return $out;
+}
+
+/** 评论当日限流账本（与投票账本分离：阈值不同、写入频度不同，不互相争文件）。 */
+function md_cmt_ip_file()
+{
+    return MD_DIR . '/cache/cmt_ip.json';
+}
+
+function md_cmt_ip_load()
+{
+    $f = md_cmt_ip_file();
+    $d = is_file($f) ? json_decode((string)md_read_text($f), true) : null;
+    return is_array($d) && isset($d['ips']) && is_array($d['ips'])
+        ? array('day' => isset($d['day']) ? (string)$d['day'] : '', 'ips' => $d['ips'])
+        : array('day' => '', 'ips' => array());
+}
+
+function md_cmt_ip_save(array $data)
+{
+    return md_write_file(md_cmt_ip_file(), json_encode($data, JSON_UNESCAPED_UNICODE));
+}
+
+/** 无 JS 提交的回跳地址：闪信码 + 锚点；p 无法解析时回首页。 */
+function md_cmt_back_url($p, $tree, $cfg, $flash)
+{
+    $key = md_feedback_resolve_rel($p, $tree, $cfg);
+    $u = $key === false ? md_url_for('', 'dir', $cfg)
+        : md_url_for(md_strip_doc_ext($key, $cfg), 'doc', $cfg);
+    return $u . (strpos($u, '?') !== false ? '&' : '?') . 'cmt=' . rawurlencode((string)$flash) . '#md-comments';
+}
+
+/**
+ * 评论区块（pager 之前）：先审后显，只列 approved。$key 为树键（带后缀），由
+ * md_show_doc 用 md_feedback_resolve_rel 解析（草稿/不存在 → false → 整块不渲染，
+ * 投票面与评论面口径一致）。无 JS 走原生表单提交 + 端点 303 回跳闪信；JS 增强在 builtin.js。
+ */
+function md_cmt_html($key, $cfg)
+{
+    if ($key === false || empty($cfg['comments']) || MD_READONLY) {
+        return '';
+    }
+    $data = md_cmt_load($key);
+    $list = md_cmt_visible($data);
+    $rel = md_strip_doc_ext($key, $cfg);
+    $byId = array();
+    foreach ($list as $c) {
+        $byId[(int)$c['id']] = $c;
+    }
+    $flashInner = '';
+    $flashCls = '';
+    $g = isset($_GET['cmt']) && is_string($_GET['cmt']) ? $_GET['cmt'] : '';
+    if ($g === '1') {
+        $flashInner = md_e(md_t('cmt_ok'));
+        $flashCls = ' is-ok';
+    } elseif ($g === '2' || $g === '3') {
+        $flashInner = md_e($g === '3' ? md_t('cmt_err_rate') : md_t('cmt_err'));
+        $flashCls = ' is-err';
+    }
+    $items = '';
+    foreach ($list as $c) {
+        $rt = (int)$c['reply_to'];
+        $isReply = $rt > 0 && isset($byId[$rt]);
+        $author = (string)$c['author'];
+        $first = function_exists('mb_substr') ? mb_substr($author, 0, 1, 'UTF-8') : substr($author, 0, 1);
+        $items .= '<li class="md-cmt-item' . ($isReply ? ' is-reply' : '') . '">'
+            . '<span class="md-cmt-avatar" aria-hidden="true">' . md_e($first) . '</span>'
+            . '<div class="md-cmt-main">'
+            . '<div class="md-cmt-meta"><b>' . md_e($author) . '</b>'
+            . '<time>' . md_e(md_rel_time((int)$c['time'])) . '</time>'
+            . ($isReply ? '<span class="md-cmt-reply-tag">' . md_e(md_t('cmt_replying',
+                array('name' => (string)$byId[$rt]['author']))) . '</span>' : '')
+            . '</div>'
+            . '<p class="md-cmt-body">' . md_e((string)$c['body']) . '</p>'
+            . '<button type="button" class="md-cmt-act" data-cmt-reply="' . (int)$c['id'] . '"'
+            . ' data-cmt-author="' . md_e($author) . '">' . md_e(md_t('cmt_reply_btn')) . '</button>'
+            . '</div></li>';
+    }
+    if ($items === '') {
+        $items = '<li class="md-cmt-empty">' . md_e(md_t('cmt_empty')) . '</li>';
+    }
+    return '<section class="md-comments" id="md-comments">'
+        . '<h2>' . md_e(md_t('cmt_title')) . ' <span class="md-cmt-count">'
+        . md_e(md_t('cmt_count', array('n' => count($list)))) . '</span></h2>'
+        . '<ol class="md-cmt-list">' . $items . '</ol>'
+        . '<form class="md-cmt-form" method="post" action="?a=comment" data-cmt-url="?a=comment"'
+        . ' data-cmt-ok="' . md_e(md_t('cmt_ok')) . '"'
+        . ' data-cmt-err="' . md_e(md_t('cmt_err')) . '"'
+        . ' data-cmt-rate="' . md_e(md_t('cmt_err_rate')) . '"'
+        . ' data-cmt-busy="' . md_e(md_t('cmt_submitting')) . '"'
+        . ' data-cmt-replying="' . md_e(md_t('cmt_replying', array('name' => ''))) . '">'
+        // 闪信容器恒在（JS 提交的行内反馈要往里写），无回跳码时隐藏
+        . '<div class="md-cmt-flash' . $flashCls . '"' . ($flashInner === '' ? ' hidden' : '') . '>'
+        . $flashInner . '</div>'
+        . '<input type="hidden" name="p" value="' . md_e($rel) . '">'
+        . '<input type="hidden" name="t" value="' . md_e(md_feedback_token()) . '">'
+        . '<input type="hidden" name="ts" value="' . time() . '">'
+        . '<input type="hidden" name="rt" value="0" data-cmt-rt>'
+        . '<input type="text" name="hp" value="" class="md-cmt-hp" tabindex="-1" autocomplete="off" aria-hidden="true">'
+        . '<span class="md-cmt-replying" hidden><span data-cmt-rt-name></span>'
+        . ' <button type="button" class="md-cmt-act" data-cmt-rt-cancel>' . md_e(md_t('cmt_reply_cancel')) . '</button></span>'
+        . '<div class="md-cmt-row">'
+        . '<label>' . md_e(md_t('cmt_name'))
+        . '<input type="text" name="author" required maxlength="40" placeholder="' . md_e(md_t('cmt_name_ph')) . '"></label>'
+        . '<label>' . md_e(md_t('cmt_email'))
+        . '<input type="email" name="email" maxlength="254"></label>'
+        . '</div>'
+        . '<label>' . md_e(md_t('cmt_body'))
+        . '<textarea name="body" rows="4" required maxlength="2000" placeholder="' . md_e(md_t('cmt_body_ph')) . '"></textarea></label>'
+        . '<button type="submit" class="md-cmt-submit">' . md_e(md_t('cmt_submit')) . '</button>'
+        . '<p class="md-cmt-note">' . md_e(md_t('cmt_pending_note')) . ' ' . md_e(md_t('cmt_email_hint')) . '</p>'
+        . '</form></section>';
+}
+
+/**
+ * 评论端点：POST ?a=comment，参数 p=<docRel> author/email/body rt=<回复id>，
+ * t=<双提交令牌> ts=<渲染时间> hp=<蜜罐，必须为空>。JS 请求回 JSON；原生表单提交 303 回跳
+ * （cmt=1 通过 / 2 失败 / 3 限流）。机器痕迹（蜜罐被填 / 渲染后 2 秒内提交 / 未来时间戳）
+ * 假装成功不写入——不给探测信号，真正的门是先审后显。
+ */
+function md_send_comment($tree, $cfg)
+{
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    header('X-Robots-Tag: noindex, nofollow');
+    $ajax = isset($_SERVER['HTTP_X_REQUESTED_WITH'])
+        && strtolower((string)$_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+    $ps = isset($_POST['p']) && is_string($_POST['p']) ? $_POST['p'] : '';
+    $md_cmt_ok = function () use ($tree, $cfg, $ajax, $ps) {
+        if ($ajax) {
+            echo '{"ok":true}';
+        } else {
+            header('Location: ' . md_cmt_back_url($ps, $tree, $cfg, '1'));
+        }
+        exit;
+    };
+    $md_cmt_fail = function ($code, $flash = '2') use ($tree, $cfg, $ajax, $ps) {
+        if ($ajax) {
+            http_response_code($code);
+            echo '{"ok":false}';
+        } else {
+            header('Location: ' . md_cmt_back_url($ps, $tree, $cfg, $flash));
+        }
+        exit;
+    };
+    if (MD_READONLY || $_SERVER['REQUEST_METHOD'] !== 'POST') {
+        $md_cmt_fail(405);
+    }
+    $tk = isset($_POST['t']) && is_string($_POST['t']) ? $_POST['t'] : '';
+    $ck = isset($_COOKIE['dd_fbt']) && is_string($_COOKIE['dd_fbt']) ? $_COOKIE['dd_fbt'] : '';
+    if ($tk === '' || $ck === '' || !hash_equals($ck, $tk)) {
+        $md_cmt_fail(403);
+    }
+    $hp = isset($_POST['hp']) && is_string($_POST['hp']) ? $_POST['hp'] : '';
+    $ts = isset($_POST['ts']) && is_string($_POST['ts']) ? $_POST['ts'] : '';
+    if ($hp !== '' || !ctype_digit($ts) || (time() - (int)$ts) < 2 || (int)$ts > time() + 60) {
+        $md_cmt_ok();
+    }
+    $key = md_feedback_resolve_rel($ps, $tree, $cfg);
+    if ($key === false) {
+        $md_cmt_fail(404);
+    }
+    $v = md_cmt_validate(
+        isset($_POST['author']) && is_string($_POST['author']) ? $_POST['author'] : '',
+        isset($_POST['email']) && is_string($_POST['email']) ? $_POST['email'] : '',
+        isset($_POST['body']) && is_string($_POST['body']) ? $_POST['body'] : ''
+    );
+    if ($v === false) {
+        $md_cmt_fail(400);
+    }
+    // 当日限流（独立账本，10/天，比投票严）：只统计过了字段校验的提交
+    list($ok, $ipData) = md_feedback_daily_hit(md_cmt_ip_load(), md_feedback_voter(), date('Y-m-d'), 10);
+    if (!$ok) {
+        $md_cmt_fail(429, '3');
+    }
+    md_cmt_ip_save($ipData);
+    $rt = isset($_POST['rt']) && is_string($_POST['rt']) && ctype_digit($_POST['rt']) ? (int)$_POST['rt'] : 0;
+    $done = md_cmt_txn($key, function (array $data) use ($v, $rt) {
+        if (!md_cmt_reply_ok($data, $rt)) {
+            return null;                            // 回复目标消失/未过审：放弃本次
+        }
+        return md_cmt_add($data, array(
+            'author'   => $v['author'],
+            'email'    => $v['email'],
+            'body'     => $v['body'],
+            'time'     => time(),
+            'reply_to' => $rt,
+            'status'   => 'pending',
+            'ip_hash'  => md_feedback_voter(),      // 审计用，同反馈哈希纪律，永不输出
+        ));
+    });
+    if (!$done) {
+        $md_cmt_fail(500);                          // 满容量/盘坏/文件损坏：并入通用失败
+    }
+    md_cmt_notify_new($cfg, $key, $v);              // 静默：通知失败不影响提交
+    $md_cmt_ok();
+}
+
+// ---------------------------------------------------------------- 邮件通知（v1.17.0，随包休眠）
+//
+// PHP mail() 在廉价虚拟主机上基本不可靠，这里内置极简 SMTP 客户端（AUTH LOGIN，
+// 隐式 TLS / STARTTLS / 明文三通道，纯文本 + base64 正文）。smtp_host 留空 = 整体休眠，
+// 零开销零外联；发信失败一律静默——评论入库是主事务，通知只是尽力而为。
+
+/** 通知开关（纯函数，可测）：评论开启 + SMTP 主机 + 合法收件邮箱三者齐备。 */
+function md_cmt_notify_enabled($cfg)
+{
+    return !empty($cfg['comments'])
+        && trim((string)(isset($cfg['smtp_host']) ? $cfg['smtp_host'] : '')) !== ''
+        && filter_var(trim((string)(isset($cfg['notify_email']) ? $cfg['notify_email'] : '')), FILTER_VALIDATE_EMAIL) !== false;
+}
+
+/** RFC 2047 主题编码（纯函数，可测）：UTF-8 → =?UTF-8?B?..?=。 */
+function md_mail_subject($s)
+{
+    return '=?UTF-8?B?' . base64_encode((string)$s) . '?=';
+}
+
+/** 文档绝对地址（邮件里用）：origin + 文档 URL + 锚点；推断不出 origin 则空。 */
+function md_cmt_doc_url($cfg, $key)
+{
+    $origin = md_site_origin($cfg);
+    if ($origin === '') {
+        return '';
+    }
+    return md_url_abs($origin, md_url_for(md_strip_doc_ext($key, $cfg), 'doc', $cfg) . '#md-comments');
+}
+
+/**
+ * 极简 SMTP 发信：不引依赖，连接/会话超时 8 秒，任何一步应答不符即放弃返回 false。
+ * smtp_secure：''（及老配置 'auto'）= 先明文连、服务器支持 STARTTLS 即升级；
+ * 'ssl' = 隐式 TLS（常配 465）；'none' = 全程明文（仅内网中继）。
+ */
+function md_smtp_send($cfg, $to, $subject, $body)
+{
+    $host = trim((string)(isset($cfg['smtp_host']) ? $cfg['smtp_host'] : ''));
+    if ($host === '' || filter_var($to, FILTER_VALIDATE_EMAIL) === false) {
+        return false;
+    }
+    $port = (int)(isset($cfg['smtp_port']) ? $cfg['smtp_port'] : 0);
+    if ($port <= 0 || $port > 65535) {
+        $port = 465;
+    }
+    $secure = (string)(isset($cfg['smtp_secure']) ? $cfg['smtp_secure'] : '');
+    if ($secure === 'auto') {
+        $secure = '';
+    }
+    $errno = 0;
+    $errstr = '';
+    $fp = @stream_socket_client(($secure === 'ssl' ? 'ssl://' : 'tcp://') . $host . ':' . $port,
+        $errno, $errstr, 8);
+    if ($fp === false) {
+        return false;
+    }
+    stream_set_timeout($fp, 8);
+
+    /** 读一个完整应答块：SMTP 多行应答以「第 4 字符为空格」的行收尾。 */
+    $readAll = function () use ($fp) {
+        $out = '';
+        for ($i = 0; $i < 60; $i++) {
+            $line = fgets($fp, 1024);
+            if ($line === false || $line === '') {
+                break;
+            }
+            $out .= $line;
+            if (strlen($line) < 4 || $line[3] === ' ') {
+                break;
+            }
+        }
+        return $out;
+    };
+
+    $resp = $readAll();
+    if (strpos($resp, '220') !== 0) {
+        fclose($fp);
+        return false;
+    }
+    // EHLO 名用站点主机名（去 scheme/路径/端口），推导不出退回 localhost
+    $heloHost = preg_replace('/^[a-z][a-z0-9+.-]*:\/\//i', '', md_site_origin($cfg));
+    $heloHost = trim(preg_replace('/[\/:\?#].*$/', '', (string)$heloHost));
+    if ($heloHost === '') {
+        $heloHost = 'localhost';
+    }
+    fwrite($fp, 'EHLO ' . $heloHost . "\r\n");
+    $caps = $readAll();
+    if (strpos($caps, '250') !== 0) {
+        fwrite($fp, 'HELO ' . $heloHost . "\r\n");
+        $caps = $readAll();
+        if (strpos($caps, '250') !== 0) {
+            fclose($fp);
+            return false;
+        }
+    }
+    if ($secure === '' && preg_match('/^250[- ]STARTTLS/m', $caps) === 1) {
+        fwrite($fp, "STARTTLS\r\n");
+        if (strpos($readAll(), '220') !== 0
+            || !@stream_socket_enable_crypto($fp, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) {
+            fclose($fp);
+            return false;
+        }
+        fwrite($fp, 'EHLO ' . $heloHost . "\r\n");
+        if (strpos($readAll(), '250') !== 0) {
+            fclose($fp);
+            return false;
+        }
+    }
+    $user = trim((string)(isset($cfg['smtp_user']) ? $cfg['smtp_user'] : ''));
+    if ($user !== '') {
+        fwrite($fp, "AUTH LOGIN\r\n");
+        if (strpos($readAll(), '334') !== 0) {
+            fclose($fp);
+            return false;
+        }
+        fwrite($fp, base64_encode($user) . "\r\n");
+        if (strpos($readAll(), '334') !== 0) {
+            fclose($fp);
+            return false;
+        }
+        fwrite($fp, base64_encode((string)(isset($cfg['smtp_pass']) ? $cfg['smtp_pass'] : '')) . "\r\n");
+        if (strpos($readAll(), '235') !== 0) {
+            fclose($fp);
+            return false;
+        }
+    }
+    $from = trim((string)(isset($cfg['smtp_from']) ? $cfg['smtp_from'] : ''));
+    if ($from === '') {
+        $from = $user;
+    }
+    if (filter_var($from, FILTER_VALIDATE_EMAIL) === false) {
+        fclose($fp);
+        return false;
+    }
+    fwrite($fp, 'MAIL FROM:<' . $from . ">\r\n");
+    if (strpos($readAll(), '250') !== 0) {
+        fclose($fp);
+        return false;
+    }
+    fwrite($fp, 'RCPT TO:<' . $to . ">\r\n");
+    $rcpt = $readAll();
+    if (strpos($rcpt, '250') !== 0 && strpos($rcpt, '251') !== 0) {
+        fclose($fp);
+        return false;
+    }
+    fwrite($fp, "DATA\r\n");
+    if (strpos($readAll(), '354') !== 0) {
+        fclose($fp);
+        return false;
+    }
+    $mail = 'From: =?UTF-8?B?' . base64_encode((string)$cfg['site_title']) . '?= <' . $from . ">\r\n"
+        . 'To: <' . $to . ">\r\n"
+        . 'Subject: ' . md_mail_subject($subject) . "\r\n"
+        . 'Date: ' . date('D, d M Y H:i:s O') . "\r\n"
+        . 'Message-ID: <' . md5($to . microtime()) . "@dirdocs>\r\n"
+        . "MIME-Version: 1.0\r\n"
+        . "Content-Type: text/plain; charset=UTF-8\r\n"
+        . "Content-Transfer-Encoding: base64\r\n\r\n"
+        . chunk_split(base64_encode((string)$body));
+    // 点 stuffing（行首点转义）：信封指令与自产报头都不会以点开头，统一过一遍最稳
+    fwrite($fp, preg_replace('/^\\./m', '..', $mail) . "\r\n.\r\n");
+    $sent = strpos($readAll(), '250') === 0;
+    fwrite($fp, "QUIT\r\n");
+    fclose($fp);
+    return $sent;
+}
+
+/** 新评论待审 → 站长邮箱（静默）。 */
+function md_cmt_notify_new($cfg, $key, array $v)
+{
+    if (!md_cmt_notify_enabled($cfg)) {
+        return;
+    }
+    $url = md_cmt_doc_url($cfg, $key);
+    $args = array(
+        'site'   => (string)$cfg['site_title'],
+        'doc'    => md_title_of($key),
+        'author' => $v['author'],
+        'body'   => md_cmt_cut($v['body'], 400),
+        'url'    => $url !== '' ? $url : md_url_for(md_strip_doc_ext($key, $cfg), 'doc', $cfg),
+    );
+    @md_smtp_send($cfg, trim((string)$cfg['notify_email']),
+        md_t('mail_cmt_subject', $args), md_t('mail_cmt_body', $args));
+}
+
+/** 回复被批准 → 被回复的评论作者（留了合法邮箱才发，静默）。 */
+function md_cmt_notify_reply_maybe($cfg, $key, $id)
+{
+    if (!md_cmt_notify_enabled($cfg)) {
+        return;
+    }
+    $data = md_cmt_load($key);
+    $target = null;
+    foreach ($data['comments'] as $c) {
+        if ((int)$c['id'] === (int)$id) {
+            $target = $c;
+            break;
+        }
+    }
+    if ($target === null || (int)$target['reply_to'] <= 0
+        || !isset($target['status']) || $target['status'] !== 'approved') {
+        return;
+    }
+    $parent = null;
+    foreach ($data['comments'] as $c) {
+        if ((int)$c['id'] === (int)$target['reply_to']
+            && isset($c['status']) && $c['status'] === 'approved'
+            && isset($c['email']) && filter_var((string)$c['email'], FILTER_VALIDATE_EMAIL) !== false) {
+            $parent = $c;
+            break;
+        }
+    }
+    if ($parent === null) {
+        return;
+    }
+    $url = md_cmt_doc_url($cfg, $key);
+    $args = array(
+        'site'   => (string)$cfg['site_title'],
+        'doc'    => md_title_of($key),
+        'author' => (string)$target['author'],
+        'body'   => md_cmt_cut((string)$target['body'], 400),
+        'url'    => $url !== '' ? $url : md_url_for(md_strip_doc_ext($key, $cfg), 'doc', $cfg),
+    );
+    @md_smtp_send($cfg, (string)$parent['email'],
+        md_t('mail_reply_subject', $args), md_t('mail_reply_body', $args));
 }
 
 /**

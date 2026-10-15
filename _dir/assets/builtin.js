@@ -8,7 +8,7 @@
  *   4. TOC 滚动高亮（IntersectionObserver，回退 scroll+getBoundingClientRect）
  *   5. code-deck 升级：头栏（语言 + 复制）+ 行号列
  *   6. h2 标题锚点注入 + 点击复制完整链接
- *   7. 反馈胶囊（localStorage 按 docRel 记忆，可取消）
+ *   7. 反馈胶囊（localStorage 按 docRel 记忆，可取消；匿名计数上报 ?a=feedback，失败静默）
  *   8. 快捷键：Ctrl/Cmd+K 或 / 聚焦搜索
  *   9. mermaid 按需加载（深浅跟随 data-bs-theme）
  *  10. 站外链接：新窗口 + noopener/noreferrer + 外链小图标
@@ -395,13 +395,15 @@
     }
   })();
 
-  /* ---------------- 7. 反馈胶囊（赞/踩：本地记忆、可取消、可切换） ---------------- */
+  /* ---------------- 7. 反馈胶囊（赞/踩：本地即时记忆 + 匿名计数上报，上报失败静默回落本地） ---------------- */
   (function feedback() {
     var box = doc.querySelector('.md-feedback[data-doc-rel]');
     if (!box) return;
     var rel = box.getAttribute('data-doc-rel');
     if (!rel) return;
     var key = 'dd-fb:' + rel;
+    var url = box.getAttribute('data-fb-url') || '';
+    var tok = box.getAttribute('data-fb-token') || '';
     var btns = {
       up: box.querySelector('[data-md-feedback="up"]'),
       down: box.querySelector('[data-md-feedback="down"]')
@@ -426,6 +428,16 @@
       btns.up.setAttribute('aria-pressed', state === 'up' ? 'true' : 'false');
       btns.down.setAttribute('aria-pressed', state === 'down' ? 'true' : 'false');
     }
+    /** 匿名计数上报：服务器按 IP 限流聚合，失败（断网/只读/限流）不影响本地记忆。 */
+    function report(v) {
+      if (!url || !tok || typeof XMLHttpRequest === 'undefined') return;
+      try {
+        var x = new XMLHttpRequest();
+        x.open('POST', url, true);
+        x.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
+        x.send('p=' + encodeURIComponent(rel) + '&v=' + encodeURIComponent(v) + '&t=' + encodeURIComponent(tok));
+      } catch (e) { /* 静默：上报是渐进增强 */ }
+    }
     paint(read());
 
     box.addEventListener('click', function (ev) {
@@ -440,6 +452,7 @@
           else localStorage.removeItem(key);
         } catch (e) { /* 存不进就只切本次会话 */ }
         paint(next);
+        report(next);
       } catch (e) { /* 忽略 */ }
     });
   })();
@@ -488,6 +501,7 @@
     var script = doc.createElement('script');
     script.src = url;
     script.async = true;
+    script.onerror = failAll;                          // 加载失败/图表库被删（slim 安装）：明确报错而非静默卡源码
     script.onload = function () {
       try {
         if (typeof mermaid === 'undefined') throw new Error('mermaid missing');
@@ -780,6 +794,97 @@
         if (tg && (tg.tagName === 'INPUT' || tg.tagName === 'TEXTAREA' || tg.isContentEditable) && !box) return;
         ev.preventDefault();
         if (box) { close(); } else { openPalette(); }
+      }
+    });
+  })();
+
+  /* ---------------- 12. 评论（v1.17.0）：回复切换 + XHR 提交；无 JS 走原生 POST + 回跳闪信 ---------------- */
+  (function comments() {
+    var form = doc.querySelector('.md-cmt-form');
+    if (!form) return;
+    var rtInput = form.querySelector('[data-cmt-rt]');
+    var chip = form.querySelector('.md-cmt-replying');
+    var chipName = chip ? chip.querySelector('[data-cmt-rt-name]') : null;
+
+    function climb(node, attr) {
+      while (node && node !== doc) {
+        if (node.getAttribute && node.getAttribute(attr)) return node;
+        node = node.parentNode;
+      }
+      return null;
+    }
+    function setReply(id, name) {
+      if (!rtInput) return;
+      rtInput.value = id > 0 ? String(id) : '0';
+      if (chip) {
+        if (id > 0) {
+          chip.hidden = false;
+          if (chipName) chipName.textContent = (form.getAttribute('data-cmt-replying') || '') + name;
+        } else {
+          chip.hidden = true;
+          if (chipName) chipName.textContent = '';
+        }
+      }
+    }
+    // 回复按钮散布在评论列表里：事件委托，向上找 data-cmt-reply
+    doc.addEventListener('click', function (ev) {
+      var b = climb(ev.target, 'data-cmt-reply');
+      if (b) {
+        setReply(parseInt(b.getAttribute('data-cmt-reply'), 10) || 0, b.getAttribute('data-cmt-author') || '');
+        var body = form.querySelector('[name="body"]');
+        if (body) body.focus();
+        return;
+      }
+      if (climb(ev.target, 'data-cmt-rt-cancel')) setReply(0, '');
+    });
+
+    form.addEventListener('submit', function (ev) {
+      if (typeof XMLHttpRequest === 'undefined') return;      // 原生表单提交兜底
+      ev.preventDefault();
+      var flash = form.querySelector('.md-cmt-flash');
+      var btn = form.querySelector('[type="submit"]');
+      var btnText = btn ? btn.textContent : '';
+      function say(cls, text) {
+        if (!flash) return;
+        flash.hidden = false;
+        flash.className = 'md-cmt-flash ' + cls;
+        flash.textContent = text;
+      }
+      if (btn) {
+        btn.disabled = true;
+        if (form.getAttribute('data-cmt-busy')) btn.textContent = form.getAttribute('data-cmt-busy');
+      }
+      try {
+        var x = new XMLHttpRequest();
+        x.open('POST', form.getAttribute('data-cmt-url') || form.getAttribute('action'), true);
+        x.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
+        x.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+        x.onreadystatechange = function () {
+          if (x.readyState !== 4) return;
+          if (btn) { btn.disabled = false; btn.textContent = btnText; }
+          var okFlag = false;
+          try { okFlag = JSON.parse(x.responseText).ok === true; } catch (e) { /* 非 JSON 按失败 */ }
+          if (okFlag) {
+            say('is-ok', form.getAttribute('data-cmt-ok') || '');
+            var body = form.querySelector('[name="body"]');
+            if (body) body.value = '';
+            setReply(0, '');
+          } else {
+            say('is-err', x.status === 429
+              ? (form.getAttribute('data-cmt-rate') || form.getAttribute('data-cmt-err') || '')
+              : (form.getAttribute('data-cmt-err') || ''));
+          }
+        };
+        var parts = [];
+        var fields = ['p', 't', 'ts', 'hp', 'rt', 'author', 'email', 'body'];
+        for (var i = 0; i < fields.length; i++) {
+          var el = form.elements[fields[i]];
+          if (el) parts.push(encodeURIComponent(fields[i]) + '=' + encodeURIComponent(el.value));
+        }
+        x.send(parts.join('&'));
+      } catch (e) {
+        if (btn) { btn.disabled = false; btn.textContent = btnText; }
+        say('is-err', form.getAttribute('data-cmt-err') || '');
       }
     });
   })();

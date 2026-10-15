@@ -96,6 +96,7 @@ if (!defined('MD_BOOT')) {
       <?php echo $ctx['content_html']; ?>
       </article>
       <?php echo isset($ctx['feedback_html']) ? $ctx['feedback_html'] : ''; ?>
+      <?php echo isset($ctx['comments_html']) ? $ctx['comments_html'] : ''; ?>
       <?php echo isset($ctx['pager_html']) ? $ctx['pager_html'] : ''; ?>
       <?php if (!empty($ctx['attach_html'])): ?>
       <section class="md-attach"><h2><?php echo md_e(md_t('attachments')); ?></h2><?php echo $ctx['attach_html']; ?></section>

@@ -1,0 +1,18 @@
+# 本仓库只发布三样东西：入口 index.php、程序目录 _dir/、说明 README.md。
+# 白名单式：先忽略根下一切，再放行这三项，以后新增的本机杂项（截图、
+# 测试文档、.zcode 等）不会误入库。
+/*
+!/.gitignore
+!/index.php
+!/README.md
+!/_dir/
+
+# _dir 里由程序在部署后自动生成的运行时部分，不入库：
+#   cache/      树/搜索缓存、修订历史、反馈与限流记账、评论锁（全部可再生）
+#   config.php  后台生成的站点配置（含口令哈希/TOTP/SMTP 凭据，缺失时回落内置默认值）
+#   .htaccess   Apache 防护规则，首次运行自动补种
+/_dir/cache/
+/_dir/config.php
+/_dir/.htaccess
+
+# 评论数据与文档同目录存放（<文档名>.cmt.php），位于白名单之外，天然不入库。

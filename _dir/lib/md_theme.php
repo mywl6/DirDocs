@@ -385,6 +385,11 @@ function md_page($ctx)
     $tocHtml = isset($ctx['toc_html']) ? $ctx['toc_html'] : '';
     $cdn = md_cdn_active($cfg);                          // head 链接与页脚 bundle 共用一次解析
     $mermaidUrl = empty($ctx['mermaid']) ? '' : $cdn['mermaid'];   // 本地 vendor 按需加载（v1.12.0 回归自托管）
+    // slim 安装（v1.16.0）：删掉 mermaid.min.js 省 3.2MB——文件缺失时不发加载点，
+    // 图表块保持源码形态（内置样式本来就是代码块），其余功能零影响
+    if ($mermaidUrl !== '' && !is_file(MD_DIR . '/assets/vendor/mermaid.min.js')) {
+        $mermaidUrl = '';
+    }
     $hasAdmin = $cfg['admin_pass'] !== '';
     $headAssets = md_theme_head_assets($cfg, $theme);    // 防闪烁脚本 + CDN + builtin.css + 主题变量
     $themeUrl = '?a=asset&t=' . rawurlencode($theme);    // 主题资产基址（拼 f=<assets/ 下文件>）

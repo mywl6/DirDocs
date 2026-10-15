@@ -1306,6 +1306,18 @@ function md_config_defaults()
         // 风险文件警示豁免（后台登记的相对路径）：精确匹配豁免单个文件，
         // 以 / 结尾豁免整个目录。只关闭警示，不影响程序自身的输出白名单
         'risk_ignore'   => array(),
+        // 访客评论（v1.17.0）：以 <文档名>.cmt.php 形式存放在文档旁（首行 PHP 执行锁），
+        // 先审后显，后台「评论」页批准。false 整站关闭评论面（端点 404、区块不渲染）
+        'comments'      => true,
+        // 邮件通知（随包休眠）：smtp_host 留空 = 不发任何信、零外联。secure 取值
+        // ''（STARTTLS 自动升级）/ 'ssl'（隐式 TLS，常配 465）/ 'none'（仅内网中继）
+        'smtp_host'     => '',
+        'smtp_port'     => '465',
+        'smtp_user'     => '',
+        'smtp_pass'     => '',
+        'smtp_from'     => '',
+        'smtp_secure'   => '',
+        'notify_email'  => '',
     );
 }
 
@@ -1335,6 +1347,18 @@ function md_config_load()
     // 界面语言白名单：非法值回落 auto（按浏览器自动），防止配置写坏后 md_lang_pack 拼错路径
     if (!isset($cfg['language']) || !in_array($cfg['language'], md_lang_supported(), true)) {
         $cfg['language'] = 'auto';
+    }
+    // 评论与邮件通知（v1.17.0）：布尔与字符串守卫，配置写坏也不影响主流程
+    if (!isset($cfg['comments'])) {
+        $cfg['comments'] = true;
+    }
+    foreach (array('smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'smtp_from', 'smtp_secure', 'notify_email') as $k) {
+        if (!isset($cfg[$k]) || !is_string($cfg[$k])) {
+            $cfg[$k] = md_config_defaults()[$k];
+        }
+    }
+    if (!in_array($cfg['smtp_secure'], array('', 'ssl', 'none', 'auto'), true)) {
+        $cfg['smtp_secure'] = '';
     }
     if (MD_READONLY) {
         $cfg['read_only'] = true;

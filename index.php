@@ -29,7 +29,7 @@ ini_set('display_errors', '0');   // 错误进日志，不回显（避免路径/
 
 // ---------------------------------------------------------------- boot
 
-define('MD_VERSION', '1.15.2');
+define('MD_VERSION', '1.17.0');
 define('MD_ROOT', realpath(__DIR__));
 define('MD_DIR', MD_ROOT . '/_dir');
 define('MD_DIRNAME', '_dir');
@@ -48,6 +48,15 @@ if (!is_dir(MD_DIR)) {
     @mkdir(MD_DIR, 0755, true);
 }
 define('MD_READONLY', !is_dir(MD_DIR) || !is_writable(MD_DIR));
+
+// _dir 防护（v1.16.0）：Apache 由 _dir/.htaccess 整目录拒绝直访（缺失时自动补种，老安装
+// 升级即生效）。资产/附件全部经程序通道输出，_dir 不需要任何静态直访；Nginx 没有目录级
+// 配置文件，对应规则在后台「设置 → 服务器加固」卡按安装路径生成。
+if (!MD_READONLY && !is_file(MD_DIR . '/.htaccess')) {
+    @file_put_contents(MD_DIR . '/.htaccess',
+        "<IfModule mod_authz_core.c>\nRequire all denied\n</IfModule>\n"
+        . "<IfModule !mod_authz_core.c>\nOrder allow,deny\nDeny from all\n</IfModule>\n");
+}
 
 // mbstring 扩展不保证存在（引擎内各处均有降级路径），boot 这行不能裸调
 if (function_exists('mb_internal_encoding')) { mb_internal_encoding('UTF-8'); }
@@ -119,6 +128,18 @@ if (md_starts_with($p, '_theme/')) {
 }
 
 $tree = md_tree_load($MD_CFG);
+
+// 反馈投票（v1.16.0）：POST ?a=feedback 匿名计数入 cache/feedback.json（限流 + 双提交令牌），
+// JSON 应答。必须在 ?q= 搜索页拦截之前——自带新 action 要抢在搜索页前面分发（v1.15.1 教训）
+if ($action === 'feedback') {
+    md_send_feedback($tree, $MD_CFG);
+}
+
+// 访客评论（v1.17.0）：POST ?a=comment 写入文档旁 <文档>.cmt.php（先审后显，限流 + 双提交令牌
+// + 时间陷阱 + 蜜罐），JSON 或 303 回跳应答。与 feedback 同批：抢在搜索页拦截之前分发
+if ($action === 'comment') {
+    md_send_comment($tree, $MD_CFG);
+}
 
 // 搜索建议：?a=suggest 输出 JSON（Ctrl+K 快速搜索弹窗的数据源，GET 只读）。
 // 必须在 ?q= 搜索页拦截之前——建议 URL 自带 q 参数，放后面会被搜索页抢先渲染成 HTML

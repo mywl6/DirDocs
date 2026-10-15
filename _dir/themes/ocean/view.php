@@ -106,6 +106,8 @@ h1{font-size:2rem;line-height:1.35;margin:.2em 0 .6em;letter-spacing:.01em}
   <h1><?php echo md_e($ctx['page_title']); ?></h1>
   <?php echo isset($ctx['risk_html']) ? $ctx['risk_html'] : ''; ?>
   <div class="md-doc"><?php echo $ctx['content_html']; ?></div>
+  <?php echo isset($ctx['feedback_html']) ? $ctx['feedback_html'] : ''; ?>
+  <?php echo isset($ctx['comments_html']) ? $ctx['comments_html'] : ''; ?>
   <?php echo isset($ctx['pager_html']) ? $ctx['pager_html'] : ''; ?>
   <?php if (!empty($ctx['attach_html'])): ?>
   <section style="margin-top:2.4rem">

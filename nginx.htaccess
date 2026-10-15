@@ -1,8 +1,0 @@
-# DirDocs pretty 伪静态样例（nginx）
-location / {
-    try_files $uri /index.php$is_args$args;
-}
-# 附件后缀不直出，交 index.php 判定（svg/md/txt 可执行内容防绕过）
-location ~* \.(svg|md|markdown|txt)$ {
-    try_files /nonexistent /index.php$is_args$args;
-}

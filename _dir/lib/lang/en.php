@@ -48,6 +48,10 @@ return array(
     'search_sort_time'     => 'By time (newest first)',
     'recent_empty'         => 'No documents yet.',
     'recent_limit'         => 'Showing the {n} most recent of {total} documents.',
+    'recent_ym_title'      => 'Recent updates · {ym}',
+    'recent_ym_all'        => 'All',
+    'recent_ym_nav_aria'   => 'Browse by month',
+    'recent_ym_empty'      => 'No updates in {ym}.',
 
     // ---- Front: template chrome / error pages / fallback ----
     'skip_content'     => 'Skip to content',
@@ -342,6 +346,33 @@ return array(
         . 'the cache files. Neither touches your documents or attachments.',
     'admin_cache_title'         => 'Cache',
 
+    // ---- Admin: document feedback (v1.16.0) ----
+    'admin_fb_title'            => 'Document feedback',
+    'admin_fb_hint'             => 'Anonymous tallies from the "Was this document helpful?" capsule on every page, sorted by '
+        . '"Needs work" first — those are the documents to revise next. Data lives in <code>_dir/cache/feedback.json</code>: '
+        . 'aggregated counts and a hash of the voter only; raw IP addresses are never stored.',
+    'admin_fb_doc'              => 'Document',
+    'admin_fb_up'               => 'Helpful',
+    'admin_fb_down'             => 'Needs work',
+    'admin_fb_empty'            => 'No feedback received yet.',
+    'admin_fb_clear'            => 'Clear feedback data',
+    'admin_fb_clear_confirm_js' => 'Clear all document feedback tallies? This cannot be undone.',
+    'admin_fb_flash_clear'      => 'Feedback tallies cleared.',
+
+    // ---- Admin: server hardening (v1.16.0) ----
+    'admin_hard_title'          => 'Server hardening',
+    'admin_hard_hint'           => 'The only executable entry of this program is <code>index.php</code>; <code>_dir/</code> holds '
+        . 'program code and internal data (cache, revision history, config) that the web server should not serve directly. Apache '
+        . 'is covered by the auto-generated <code>_dir/.htaccess</code>; Nginx has no per-directory config files, so add the rule '
+        . 'below to your server configuration — independent of the routing mode, recommended in simple mode too:',
+    'admin_hard_htaccess_ok'    => '_dir/.htaccess is in place: under Apache the whole _dir/ folder (cache and revision history '
+        . 'included) denies direct access.',
+    'admin_hard_htaccess_ro'    => '_dir is not writable, so _dir/.htaccess could not be generated. Place an .htaccess containing '
+        . '"Require all denied" in that folder manually.',
+    'admin_hard_mermaid_missing' => '_dir/assets/vendor/mermaid.min.js was not found (slim install): mermaid diagrams in documents '
+        . 'display as source code; everything else is unaffected. Restore the file to render charts (see vendor/README.md for '
+        . 'source and checksums).',
+
     // ---- Admin: settings ----
     'admin_flash_site'  => 'Site settings saved.',
     'admin_flash_user'  => 'Username changed. Use the new username at next sign-in.',
@@ -490,4 +521,59 @@ return array(
     'js_kbd_empty'       => 'No matching documents',
     'js_kbd_open'        => 'Open',
     'js_kbd_close'       => 'Close',
+
+    // ---- Comments (v1.17.0): front block + moderation + settings + mail templates ----
+    'cmt_title'          => 'Comments',
+    'cmt_count'          => array('one' => '{n} comment', 'other' => '{n} comments'),
+    'cmt_empty'          => 'No comments yet. Start the conversation below.',
+    'cmt_name'           => 'Name',
+    'cmt_name_ph'        => 'What should we call you?',
+    'cmt_email'          => 'Email (optional)',
+    'cmt_email_hint'     => 'Your email is only used for reply notifications and never shown.',
+    'cmt_body'           => 'Comment',
+    'cmt_body_ph'        => 'Be helpful and kind.',
+    'cmt_submit'         => 'Submit',
+    'cmt_submitting'     => 'Submitting…',
+    'cmt_replying'       => 'Replying to @{name}',
+    'cmt_reply_cancel'   => 'Cancel reply',
+    'cmt_reply_btn'      => 'Reply',
+    'cmt_pending_note'   => 'Comments are reviewed before they appear.',
+    'cmt_ok'             => 'Submitted! It will appear here once approved.',
+    'cmt_err'            => 'Submission failed. Please try again later.',
+    'cmt_err_rate'       => 'Too many submissions today. Please try again tomorrow.',
+    'admin_nav_comments' => 'Comments',
+    'admin_cmt_title'    => 'Comment moderation',
+    'admin_cmt_pending'  => 'Pending ({n})',
+    'admin_cmt_approved' => 'Approved ({n})',
+    'admin_cmt_doc_n'    => '({n})',
+    'admin_cmt_doc'      => 'Document: ',
+    'admin_cmt_orphans'  => 'Orphaned comment files',
+    'admin_cmt_approve'  => 'Approve',
+    'admin_cmt_delete'   => 'Delete',
+    'admin_cmt_delfile'  => 'Delete file',
+    'admin_cmt_none_pending' => 'No pending comments.',
+    'admin_cmt_none_all' => 'No comments site-wide yet.',
+    'admin_cmt_orphan_hint'  => 'These comment files belong to documents that no longer exist. Delete them once confirmed unused.',
+    'admin_cmt_flash_ok' => 'Comment actions completed.',
+    'admin_st_cmt_title' => 'Comments & notifications',
+    'admin_st_cmt_smtp'  => 'Email notification (SMTP)',
+    'admin_st_cmt_hint'  => 'Comments are stored next to documents as <name>.cmt.php and require approval. With no SMTP host configured nothing is ever sent and no outbound connection is made; mail failures are silent.',
+    'admin_kv_comments'  => 'Enable comments (approve first)',
+    'admin_kv_notify'    => 'Owner notification email',
+    'admin_kv_notify_hint' => 'Receive mail when a new comment awaits review; leave empty for none.',
+    'admin_kv_smtp_host' => 'SMTP host',
+    'admin_kv_smtp_port' => 'SMTP port',
+    'admin_kv_smtp_user' => 'SMTP username',
+    'admin_kv_smtp_pass' => 'SMTP password',
+    'admin_kv_smtp_pass_keephint' => 'Leave blank to keep the stored password.',
+    'admin_kv_smtp_from' => 'From address',
+    'admin_kv_smtp_secure' => 'Encryption',
+    'admin_smtp_auto'    => 'Auto (STARTTLS when offered)',
+    'admin_smtp_ssl'     => 'SSL/TLS implicit (usually 465)',
+    'admin_smtp_none'    => 'None (LAN relay only)',
+    'admin_flash_cmt'    => 'Comment settings saved.',
+    'mail_cmt_subject'   => '[{site}] New comment pending: {doc}',
+    'mail_cmt_body'      => "A new comment on \"{doc}\" is awaiting review.\n\nName: {author}\nComment:\n{body}\n\nModerate: {url}\n\n-- DirDocs",
+    'mail_reply_subject' => '[{site}] {author} replied to your comment',
+    'mail_reply_body'    => "Hello,\n\n{author} replied to your comment on \"{doc}\":\n\n{body}\n\nView: {url}\n\n-- DirDocs",
 );

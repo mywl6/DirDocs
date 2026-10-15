@@ -713,6 +713,14 @@ mark{background:var(--mark-bg);color:var(--accent);padding:1px 4px;border-radius
 .md-recent a{color:var(--text);font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .md-recent a:hover{color:var(--accent)}
 .md-rpath{margin-left:auto;flex:0 0 auto;color:var(--text3);font-size:.7rem;font-family:var(--mono)}
+/* 月份导航（最近更新页 v1.16.0）：胶囊式月份切换，当前项实心 */
+.md-ymnav{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;margin:.8rem 0 0;font-size:.78rem}
+.md-ymnav a,.md-ymnav .md-ym-on{
+  padding:.22rem .7rem;border-radius:999px;font-family:var(--mono);
+  border:1px solid var(--border);color:var(--text2);
+}
+.md-ymnav a:hover{color:var(--accent);border-color:var(--accent)}
+.md-ymnav .md-ym-on{background:var(--accent-weak);border-color:var(--accent);color:var(--accent);font-weight:600}
 
 /* ---------------- 提示 / 空态 / 风险警示 ---------------- */
 .md-hint{font-size:.78rem;color:var(--text3);margin:.5rem 0}
@@ -885,7 +893,7 @@ mark{background:var(--mark-bg);color:var(--accent);padding:1px 4px;border-radius
   }
 }
 @media print{
-  .top-navbar,.doc-sidebar,.md-offcanvas,.doc-toc,#scrollProgress,.md-searchbox,.md-copy,.md-skip,.md-pager,.md-feedback,
+  .top-navbar,.doc-sidebar,.md-offcanvas,.doc-toc,#scrollProgress,.md-searchbox,.md-copy,.md-skip,.md-pager,.md-feedback,.md-comments,
   .code-deck-header,.header-anchor,.md-lightbox,.md-ext-ico{display:none!important}
   /* v1.15.0 补漏：移动端悬浮按钮/页脚/底部大纲弹层；代码块表格防跨页截断 */
   .md-fab,.md-footer-links,.md-footer-meta,.md-tocsheet,.md-kbd{display:none!important}
@@ -914,3 +922,41 @@ mark{background:var(--mark-bg);color:var(--accent);padding:1px 4px;border-radius
 .md-kbd-hint{border-top:1px solid var(--border-subtle)}
 
 
+
+/* ---- 评论（v1.17.0）：与反馈胶囊同变量体系，无新依赖；表单无 JS 也可原生提交 ---- */
+.md-comments{margin:28px 0 8px;padding-top:6px;border-top:1px solid var(--border-subtle)}
+.md-comments h2{font-size:1.05rem;margin:0 0 4px}
+.md-cmt-count{font-size:13px;color:var(--text2);font-weight:400}
+.md-cmt-list{list-style:none;margin:0;padding:0}
+.md-cmt-item{display:flex;gap:10px;padding:12px 0;border-bottom:1px dashed var(--border-subtle)}
+.md-cmt-item:last-child{border-bottom:0}
+.md-cmt-item.is-reply{margin-left:40px}
+.md-cmt-avatar{flex:0 0 30px;width:30px;height:30px;border-radius:50%;background:var(--accent-weak);
+  color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600}
+.md-cmt-main{flex:1;min-width:0}
+.md-cmt-meta{font-size:13px;color:var(--text2);display:flex;flex-wrap:wrap;gap:8px;align-items:baseline}
+.md-cmt-meta b{color:var(--text)}
+.md-cmt-reply-tag{color:var(--accent)}
+.md-cmt-body{margin:4px 0 2px;white-space:pre-wrap;word-break:break-word;font-size:15px}
+.md-cmt-act{background:none;border:0;padding:0;color:var(--text2);cursor:pointer;font-size:12px}
+.md-cmt-act:hover{color:var(--accent)}
+.md-cmt-form{margin-top:14px;display:grid;gap:10px}
+.md-cmt-form label{display:grid;gap:4px;font-size:13px;color:var(--text2)}
+.md-cmt-row{display:grid;gap:10px;grid-template-columns:1fr 1fr}
+@media (max-width:575px){.md-cmt-row{grid-template-columns:1fr}}
+.md-cmt-form input[type="text"],.md-cmt-form input[type="email"],.md-cmt-form textarea{
+  width:100%;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);
+  color:var(--text);padding:9px 12px;font-size:14px}
+.md-cmt-form textarea{resize:vertical;min-height:96px}
+.md-cmt-form input:focus,.md-cmt-form textarea:focus{outline:none;border-color:var(--accent)}
+.md-cmt-submit{justify-self:start;border:0;border-radius:var(--radius-sm);background:var(--accent);
+  color:#fff;padding:9px 18px;font-size:14px;cursor:pointer}
+.md-cmt-submit:disabled{opacity:.6;cursor:default}
+.md-cmt-note{font-size:12px;color:var(--text2);margin:0}
+.md-cmt-flash{border-radius:var(--radius-sm);padding:9px 12px;font-size:13px}
+.md-cmt-flash.is-ok{background:rgba(25,135,84,.12);color:#198754}
+.md-cmt-flash.is-err{background:rgba(220,53,69,.12);color:#dc3545}
+.md-cmt-replying{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--accent);
+  background:var(--accent-weak);border-radius:999px;padding:3px 10px;justify-self:start}
+.md-cmt-hp{position:absolute!important;left:-9999px!important;width:1px;height:1px;overflow:hidden}
+.md-cmt-empty{color:var(--text2);font-size:14px;padding:10px 0}
