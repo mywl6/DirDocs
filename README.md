@@ -1,3 +1,24 @@
+<div align="center">
+  <img src=".github/assets/banner.svg" alt="DirDocs — 放哪，哪就是知识库 / Drop a folder, get a knowledge base." width="760">
+
+  <p>
+    <a href="#简体中文"><b>简体中文</b></a> ·
+    <a href="#english"><b>English</b></a>
+  </p>
+
+  <p>
+    <img alt="PHP" src="https://img.shields.io/badge/PHP-7.1%E2%80%938.4-777BB4?logo=php&logoColor=white&style=flat-square">
+    <img alt="License" src="https://img.shields.io/badge/License-MIT-2ea44f?style=flat-square">
+    <img alt="Database" src="https://img.shields.io/badge/Database-none-2ea44f?style=flat-square">
+    <img alt="Build" src="https://img.shields.io/badge/Build%20step-none-2ea44f?style=flat-square">
+    <img alt="Third-party requests" src="https://img.shields.io/badge/3rd%20party%20requests-zero%2A-2ea44f?style=flat-square">
+  </p>
+</div>
+
+---
+
+<a id="简体中文"></a>
+
 # DirDocs
 
 **AI 生成的 Markdown 越堆越多、管不过来？把文件夹放上去，就是知识库。**
@@ -12,6 +33,14 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
 **放哪，哪就是知识库**。人类在浏览器里阅读、搜索、投票、留评；AI 工具继续按
 老习惯读写同一批纯文件。没有新平台要喂，没有内容要迁移——
 写进目录的那一刻，它已经在知识库里了。
+
+## 界面一览
+
+| 首页 · 浅色 | 首页 · 深色 |
+|---|---|
+| [![首页浅色](.github/assets/home-light.png)](.github/assets/home-light.png) | [![首页深色](.github/assets/home-dark.png)](.github/assets/home-dark.png) |
+| **全站搜索（Ctrl+K）** | **最近更新** |
+| [![搜索弹窗](.github/assets/search-dark.png)](.github/assets/search-dark.png) | [![最近更新](.github/assets/recent-light.png)](.github/assets/recent-light.png) |
 
 ## 为什么对 AI 时代的文档刚好
 
@@ -148,6 +177,204 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
 - 想要 `/项目A/说明` 这样的干净 URL：后台设置里切到 pretty 模式，
   页面会给出对应你安装路径的 rewrite 规则，粘贴到服务器配置即可
 
-## 许可
+---
+
+<a id="english"></a>
+
+# DirDocs
+
+**Drowning in AI-generated Markdown? Drop a folder onto a PHP host — that's your knowledge base.**
+
+Cursor, Claude Code, Codex… every round of AI coding leaves dozens of `.md` files
+behind: architecture notes, API docs, plans, retros. They are useful the day they are
+generated, stale two weeks later — nobody updates them, nobody dares delete them.
+Notion is too heavy, docsify only renders, Git repos are hostile to non-programmers,
+and "organize the docs" never makes it onto the schedule.
+
+DirDocs cuts the cost of this to zero: **docs are already `.md` files, and folders
+are already the hierarchy.** Whatever directory the AI writes into, drop that
+directory onto any PHP host and it becomes a documentation site —
+**put it anywhere, it's a knowledge base.** Humans read, search, vote and comment in
+the browser; AI tools keep reading and writing the same plain files as always.
+No new platform to feed, no content to migrate — the moment something is written
+into the folder, it is already in the knowledge base.
+
+## Screenshots
+
+| Home · light | Home · dark |
+|---|---|
+| [![Home light](.github/assets/home-light.png)](.github/assets/home-light.png) | [![Home dark](.github/assets/home-dark.png)](.github/assets/home-dark.png) |
+| **Site-wide search (Ctrl+K)** | **Recent updates** |
+| [![Search palette](.github/assets/search-dark.png)](.github/assets/search-dark.png) | [![Recent updates](.github/assets/recent-light.png)](.github/assets/recent-light.png) |
+
+## Why it fits AI-era docs
+
+- **Zero-adaptation intake**: the front matter AI already writes just works —
+  `title` sets the heading, `order` sets the position, `draft: true` hides the page;
+  `01-` / `02-` numeric prefixes sort too
+- **Undo for AI rewrites**: every overwrite-save in the online editor keeps a revision
+  (last 20 per doc) with preview, diff and one-click restore; mark unfinished work
+  `draft: true` and it vanishes from nav/search/feed/sitemap while staying previewable
+  in the admin
+- **Stale docs surface themselves**: an anonymous "was this helpful?" vote sits at the
+  bottom of every doc; aggregates flow into the admin, and the most-downvoted docs float
+  to the top — that list is exactly what the AI should rewrite next (IPs enter the daily
+  rate-limit ledger as hashes only, never stored raw; read-only deployments hide the
+  voting pill)
+- **Readers can talk, spam can't get in**: a comment form at the bottom of every doc,
+  held for approval (approve/delete on the admin "Comments" page); data lives beside the
+  doc as `<doc>.cmt.php` (first-line PHP execution lock, direct hits get 403, no server
+  config required) and follows renames/deletes; the write path uses flock-held
+  transactions + atomic replace, double-submit tokens + daily rate limit (10/day) +
+  time trap + honeypot; optional SMTP notifications (new comments to the owner, replies
+  to the person replied to; with no SMTP host configured there is zero outbound traffic
+  and send failures stay silent)
+- **Machine-readable too**: `?a=rss` subscribes to the last 20 updates, `?a=sitemap`
+  lists the whole site; docs remain plain files in a folder — editors, scripts and AI
+  tools read and write them directly at any time
+- **Findable**: `Ctrl+K` summons a site-wide search palette; the recent-updates page is
+  browsable by month (`?a=recent&ym=2026-10`, switching only between months that have
+  updates)
+
+## The plain foundation
+
+None of the above relies on any cloud service. It stands on a deliberately modest base:
+
+- Zero install: no installer, no path configuration, no database, no composer
+- Zero build: native PHP + CSS-variable theming, no frontend framework
+- Zero outbound requests: Bootstrap / icon fonts / mermaid / the QR library are all
+  self-hosted under `_dir/assets/vendor/`; at runtime nothing is requested from any
+  third-party domain (optional SMTP sending excepted; intranet/offline environments work)
+- Compatible with PHP 7.1 ~ 8.4 (cheap shared hosting is largely stuck on 7.x)
+- Bilingual UI: the `language` config accepts auto (follows the browser) / zh-CN / en —
+  UI chrome only, never your content
+- Site-wide print stylesheet
+- Security baseline: the only executable surface is `index.php`; user content is always
+  whitelisted and escaped before output (mechanism by mechanism under
+  ["Security design"](#security-design))
+
+## Deploy
+
+Copy `index.php` into the target directory and visit it — done:
+
+```
+your-dir/
+├── index.php        ← copy this one file in (never touch it again)
+├── _dir/            ← auto-generated on first visit (program code + your data)
+├── ProjectA/
+│   ├── overview.md
+│   └── architecture.png
+└── ProjectB/...
+```
+
+At the web root, the whole root is the docs; under `/docs/`, that level is the site.
+
+**Upgrading**: overwrite the old `_dir/lib/` and `_dir/assets/` with the new versions —
+`index.php` stays untouched, and so does your data (`_dir/config.php`, `_dir/cache/`,
+`_dir/themes/`).
+
+**Slimming**: don't need mermaid diagrams? Delete `_dir/assets/vendor/mermaid.min.js`
+(~3.2 MB) — the runtime detects its absence, chart blocks render as source code, and
+everything else is unaffected; the admin overview flags the missing file. Put it back
+(sources and checksums in `vendor/README.md`) to re-enable charts.
+
+## Admin panel
+
+Open **`http://yourdomain/index.php?a=admin`** in a browser (or the "Admin" link in the
+bottom corner of any page).
+
+The first visit sets the admin password (at least 8 characters). The admin does five
+things:
+
+1. **Site settings** — title, subtitle, theme, UI language, URL mode, allowed
+   extensions, password change
+2. **Documents** — edit/create Markdown online (use a local editor for long-form work;
+   the web editor is for quick fixes); every overwrite-save keeps a revision (last 20
+   per doc) with preview, diff and one-click restore
+3. **Uploads** — upload attachments to a chosen directory, whitelist extensions
+   (images/pdf/zip/mp4…)
+4. **Cache** — rebuild/clear indexes, view recent updates
+5. **Comments** — visitor comments are held for approval: pending list, approve, delete
+
+Five failed logins lock the account for 10 minutes.
+
+## What each file does
+
+| Path | Role | On upgrade |
+|---|---|---|
+| `index.php` | Entry: boot + load + route | **never changes** |
+| `_dir/lib/*.php` | Business code (engine/i18n/pages/theme/admin modules) + `lang/` packs | overwrite |
+| `_dir/assets/` | Built-in CSS/JS + self-hosted vendor libs (Bootstrap/icons/mermaid/qrcode) | overwrite |
+| `_dir/config.php` | Your site config | untouched |
+| `_dir/cache/` | Index cache (safe to delete) | untouched |
+| `_dir/themes/` | Your custom themes | untouched |
+| everything else | Your docs and attachments | untouched |
+
+<a id="security-design"></a>
+
+## Security design
+
+Every mechanism is listed in the open — verify each against the source:
+
+- **Atomic writes**: config and cache writes always go through "temp file (`LOCK_EX`) +
+  `rename()` atomic replace" — concurrent writes or power loss never leave half-written
+  files, and failed writes have a rollback path.
+- **Link protocol whitelist**: Markdown is fully escaped first, then URLs are restored;
+  only `http` / `https` / `mailto` pass (control characters and zero-width characters
+  are stripped before the check). Dangerous protocols lose the link but keep the text.
+- **Symlink rejection**: paths are normalized via `realpath()` and validated per
+  path segment (`/foo` does not match `/foobar`); any `is_link()` hit is rejected —
+  content symlinked out of the tree is unreachable; file types additionally go through
+  an extension whitelist.
+- **Attachments always served by the program**: under both URL modes attachments never
+  hit the web server's static handler; they pass the extension whitelist and visibility
+  checks first. `svg`/`md`/`txt` are always sent with `Content-Disposition: attachment`,
+  blocking the main channel for SVG-embedded scripts; the single exception is `<img>`
+  embedding (`Sec-Fetch-Dest: image`) — SVG loads as an image cannot execute scripts,
+  so the program allows inline delivery and adds a `script-src 'none'` belt-and-suspenders;
+  every other context (direct link, iframe, object) still forces a download. Chinese
+  filenames follow RFC 5987; pretty-mode rewrite rules never serve these four extensions
+  statically either (the admin rule generator includes this).
+- **One executable surface**: the only executable file in the whole site is `index.php`;
+  `_dir/lib/*.php` files carry an `MD_BOOT` gate and answer direct web access with a 403
+  without executing a single line.
+- **Two-layer `_dir` protection**: the program auto-generates `_dir/.htaccess`
+  (Apache denies direct access to the whole directory; assets and attachments all flow
+  through the program channel, so denying direct access costs nothing), and re-seeds it
+  on every boot if missing; revision files are gated PHP data files that answer direct
+  access with a blank 403 — even on servers without directory-level protection (Nginx
+  shared hosting can't paste rules), caches and draft history never leak. Nginx rules can
+  be copied from the admin ("Settings → Server hardening") for your exact install path.
+- **Admin**: passwords stored via `password_hash`; login failures locked per IP+UA;
+  every POST carries a CSRF token (compared with `hash_equals`); session cookies are
+  `HttpOnly + SameSite=Lax`; optional TOTP two-factor (RFC 6238 in pure PHP, bind by
+  QR or manual secret on the settings page; failed TOTP codes share the password lockout
+  cadence with in-session replay protection; lost authenticator? delete the `admin_totp`
+  line in `_dir/config.php` to reset).
+- **CSP**: every page ships a `Content-Security-Policy` (`default-src 'self'`,
+  `script-src 'self'`, `form-action 'self'`, `base-uri 'self'`). With everything
+  self-hosted the policy is purely same-origin — no third-party domain is allowed;
+  `style-src` keeps `unsafe-inline` only for the program-generated theme variable block.
+- **HTTP layer**: ETag/304 conditional requests, single-range support (206/416 edge
+  handling), `Vary: Accept-Language` when the UI language is auto (shared caches vary by
+  language), and `display_errors` forced off so paths never leak.
+- **Structural risk disclosure**: if `.php`/`.html` files end up mixed into the doc
+  tree, the program will not serve them (invisible and un-downloadable outside the
+  whitelist); the web server may still respond to them under its own rules — the program
+  scans for such risky files and shows a warning banner at the top (the list is visible
+  after admin login). Only store docs and attachments in the doc tree.
+
+## Requirements
+
+- PHP 7.1 ~ 8.4 with `mbstring` (search degrades without it) and `session`
+- Apache / Nginx / `php -S` all fine; **no rewrite rules required** (query-string
+  routing works with zero configuration)
+- For clean URLs like `/ProjectA/overview`: switch to pretty mode in the admin settings
+  and paste the generated rewrite rules — tailored to your install path — into the
+  server config
+
+---
+
+## License / 许可
 
 MIT
