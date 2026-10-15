@@ -38,9 +38,9 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
 
 | 首页 · 浅色 | 首页 · 深色 |
 |---|---|
-| [![首页浅色](.github/assets/home-light.png)](.github/assets/home-light.png) | [![首页深色](.github/assets/home-dark.png)](.github/assets/home-dark.png) |
+| [![首页浅色](.github/assets/home-light.svg)](.github/assets/home-light.svg) | [![首页深色](.github/assets/home-dark.svg)](.github/assets/home-dark.svg) |
 | **全站搜索（Ctrl+K）** | **最近更新** |
-| [![搜索弹窗](.github/assets/search-dark.png)](.github/assets/search-dark.png) | [![最近更新](.github/assets/recent-light.png)](.github/assets/recent-light.png) |
+| [![搜索弹窗](.github/assets/search-dark.svg)](.github/assets/search-dark.svg) | [![最近更新](.github/assets/recent-light.svg)](.github/assets/recent-light.svg) |
 
 ## 为什么对 AI 时代的文档刚好
 
@@ -203,9 +203,9 @@ into the folder, it is already in the knowledge base.
 
 | Home · light | Home · dark |
 |---|---|
-| [![Home light](.github/assets/home-light.png)](.github/assets/home-light.png) | [![Home dark](.github/assets/home-dark.png)](.github/assets/home-dark.png) |
+| [![Home light](.github/assets/home-light.svg)](.github/assets/home-light.svg) | [![Home dark](.github/assets/home-dark.svg)](.github/assets/home-dark.svg) |
 | **Site-wide search (Ctrl+K)** | **Recent updates** |
-| [![Search palette](.github/assets/search-dark.png)](.github/assets/search-dark.png) | [![Recent updates](.github/assets/recent-light.png)](.github/assets/recent-light.png) |
+| [![Search palette](.github/assets/search-dark.svg)](.github/assets/search-dark.svg) | [![Recent updates](.github/assets/recent-light.svg)](.github/assets/recent-light.svg) |
 
 ## Why it fits AI-era docs
 
