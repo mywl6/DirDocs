@@ -1,0 +1,37 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 提取 CHANGELOG 中本版本段落作为发布说明
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v ver="v$VERSION" '
+            $0 ~ ("^## " ver "( |$)") {found = 1; next}
+            /^## / {found = 0}
+            found
+          ' CHANGELOG.md > release_notes.md
+          [ -s release_notes.md ] || echo "详见 [CHANGELOG.md](CHANGELOG.md)。" > release_notes.md
+
+      - name: 打包并创建 Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git archive --format=zip --prefix="DirDocs-${GITHUB_REF_NAME#v}/" \
+            -o "DirDocs-${GITHUB_REF_NAME}.zip" \
+            "$GITHUB_REF_NAME" -- index.php _dir README.md CHANGELOG.md LICENSE
+          gh release create "$GITHUB_REF_NAME" \
+            "DirDocs-${GITHUB_REF_NAME}.zip" \
+            --title "DirDocs $GITHUB_REF_NAME" \
+            --notes-file release_notes.md

@@ -1,0 +1,91 @@
+name: Bug 反馈
+description: 报告 DirDocs 运行中的异常（安全漏洞请勿使用此模板，见 SECURITY.md）
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！提交前请先[搜索现有 issue](https://github.com/mywl6/DirDocs/issues?q=is%3Aissue+is%3Aopen)避免重复。
+        **安全漏洞请勿在此公开提交**，请按 [SECURITY.md](https://github.com/mywl6/DirDocs/blob/main/SECURITY.md) 私下报告。
+  - type: input
+    id: version
+    attributes:
+      label: DirDocs 版本
+      description: 后台页脚可见；不确定可填「不确定」
+    validations:
+      required: true
+  - type: dropdown
+    id: php
+    attributes:
+      label: PHP 版本
+      options:
+        - "7.1"
+        - "7.2"
+        - "7.3"
+        - "7.4"
+        - "8.0"
+        - "8.1"
+        - "8.2"
+        - "8.3"
+        - "8.4"
+        - 不确定 / 其他
+    validations:
+      required: true
+  - type: dropdown
+    id: server
+    attributes:
+      label: Web 服务器
+      options:
+        - Apache
+        - nginx
+        - IIS
+        - PHP 内置服务器（php -S）
+        - 宝塔 / cPanel 等面板
+        - 其他
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: 安装位置
+      options:
+        - 域名根目录
+        - 子目录
+        - 不确定
+  - type: dropdown
+    id: pretty
+    attributes:
+      label: URL 美化（pretty）
+      options:
+        - 已开启
+        - 未开启
+        - 不确定
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 尽量基于最小环境（全新的 index.php + 一两篇简单文档），便于区分程序问题与文档内容问题
+      placeholder: |
+        1. 打开「……」
+        2. 点击「……」
+        3. 出现 ……
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为 与 实际行为
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: 截图 / 日志 / 补充信息
+      description: 选填
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 已搜索现有 issue，未发现重复
+        - label: 换一篇简单 Markdown 文档仍能复现（已排除文档内容本身的问题）

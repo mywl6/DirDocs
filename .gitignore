@@ -1,5 +1,6 @@
 # 本仓库只发布：入口 index.php、程序目录 _dir/、说明 README.md、更新日志 CHANGELOG.md、
-# README 配图 .github/assets/（点前缀目录对本机 DirDocs 文档树隐身）。
+# 贡献与安全文档 CONTRIBUTING.md / SECURITY.md、.github/（README 配图 assets/、
+# Issue/PR 模板、自动发版 workflow；点前缀目录对本机 DirDocs 文档树隐身）。
 # 白名单式：先忽略根下一切，再放行这几项，以后新增的本机杂项（截图、
 # 测试文档、.zcode 等）不会误入库。
 /*
@@ -10,6 +11,8 @@
 !/LICENSE
 !/_dir/
 !/.github/
+!/CONTRIBUTING.md
+!/SECURITY.md
 
 # _dir 里由程序在部署后自动生成的运行时部分，不入库：
 #   cache/      树/搜索缓存、修订历史、反馈与限流记账、评论锁（全部可再生）
