@@ -36,10 +36,17 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
 
 ## 界面一览
 
-<div align="center">
-  <img src=".github/assets/ui-tour.svg" alt="DirDocs 界面导览" width="880">
-  <p><sub>自动轮播：首页浅色 → 深色 → Ctrl+K 全站搜索 → 最近更新</sub></p>
-</div>
+**主题切换**（浅色 ⇄ 深色）
+
+![主题切换](.github/assets/theme-toggle.mp4)
+
+**全站搜索**（Ctrl+K）
+
+![全站搜索](.github/assets/search.mp4)
+
+**最近更新**
+
+![最近更新](.github/assets/recent.mp4)
 
 ## 为什么对 AI 时代的文档刚好
 
@@ -201,10 +208,17 @@ into the folder, it is already in the knowledge base.
 
 ## Screenshots
 
-<div align="center">
-  <img src=".github/assets/ui-tour.svg" alt="DirDocs UI tour" width="880">
-  <p><sub>Auto-cycling: home (light) → home (dark) → Ctrl+K search → recent updates</sub></p>
-</div>
+**Theme switching** (light ⇄ dark)
+
+![Theme switching](.github/assets/theme-toggle.mp4)
+
+**Site-wide search** (Ctrl+K)
+
+![Site-wide search](.github/assets/search.mp4)
+
+**Recent updates**
+
+![Recent updates](.github/assets/recent.mp4)
 
 ## Why it fits AI-era docs
 
