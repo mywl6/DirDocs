@@ -11,20 +11,44 @@
     <pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse">
       <path d="M28 0H0v28" fill="none" stroke="#2563d6" stroke-opacity="0.06"/>
     </pattern>
+    <clipPath id="card"><rect width="960" height="280" rx="16"/></clipPath>
   </defs>
+
+  <style>
+    .anim-doc  { animation: bob 3.2s ease-in-out infinite; }
+    .anim-zh   { animation: tzh 9s ease-in-out infinite; }
+    .anim-en   { animation: ten 9s ease-in-out infinite; }
+    .anim-sheen{ animation: sheen 7s ease-in-out infinite; }
+    @keyframes bob  { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+    @keyframes tzh  { 0%,38% { opacity: 1; } 52%,86% { opacity: 0; } 100% { opacity: 1; } }
+    @keyframes ten  { 0%,38% { opacity: 0; } 52%,86% { opacity: 1; } 100% { opacity: 0; } }
+    @keyframes sheen{ 0%,58% { transform: translateX(-220px) rotate(18deg); opacity: 0; }
+                      66%    { opacity: 0.5; }
+                      80%,100%{ transform: translateX(1060px) rotate(18deg); opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) {
+      .anim-doc, .anim-zh, .anim-en, .anim-sheen { animation: none; }
+      .anim-en { opacity: 0; }
+    }
+  </style>
 
   <rect width="960" height="280" rx="16" fill="url(#bg)"/>
   <rect width="960" height="280" rx="16" fill="url(#grid)"/>
-  <rect x="1.5" y="1.5" width="957" height="277" rx="15" fill="none" stroke="#d4e0f2"/>
 
-  <!-- 图标：文件夹 + 冒头的 .md 文档 -->
+  <!-- 扫光（限制在圆角卡片内） -->
+  <g clip-path="url(#card)">
+    <rect class="anim-sheen" x="-140" y="-80" width="150" height="440" fill="#ffffff" opacity="0"/>
+  </g>
+
+  <!-- 图标：文件夹 + 浮动的 .md 文档 -->
   <g transform="translate(206,88)">
     <path d="M10 4 h34 l14 14 h74 a10 10 0 0 1 10 10 v58 a10 10 0 0 1 -10 10 h-132 a10 10 0 0 1 -10 -10 v-72 a10 10 0 0 1 10 -10 z"
           fill="url(#accent)"/>
-    <rect x="36" y="-16" width="88" height="92" rx="8" fill="#ffffff" stroke="#c7d7ef" stroke-width="1.5"/>
-    <polyline points="52,8 52,26 62,14 72,26 72,8" fill="none" stroke="#2563d6" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
-    <line x1="86" y1="8" x2="86" y2="24" stroke="#2563d6" stroke-width="3.5" stroke-linecap="round"/>
-    <polyline points="80,19 86,26 92,19" fill="none" stroke="#2563d6" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <g class="anim-doc">
+      <rect x="36" y="-16" width="88" height="92" rx="8" fill="#ffffff" stroke="#c7d7ef" stroke-width="1.5"/>
+      <polyline points="52,8 52,26 62,14 72,26 72,8" fill="none" stroke="#2563d6" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <line x1="86" y1="8" x2="86" y2="24" stroke="#2563d6" stroke-width="3.5" stroke-linecap="round"/>
+      <polyline points="80,19 86,26 92,19" fill="none" stroke="#2563d6" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
     <rect x="-10" y="34" width="162" height="54" rx="10" fill="#2f6bde"/>
     <rect x="-10" y="34" width="162" height="10" rx="5" fill="#ffffff" opacity="0.14"/>
   </g>
@@ -32,6 +56,11 @@
   <!-- 字标 -->
   <text x="392" y="158" font-family="'Segoe UI','PingFang SC','Microsoft YaHei',system-ui,sans-serif" font-size="92" fill="#17233b"><tspan font-weight="300">Dir</tspan><tspan font-weight="800">Docs</tspan></text>
 
-  <!-- 标语 -->
-  <text x="480" y="226" text-anchor="middle" font-family="'Segoe UI','PingFang SC','Microsoft YaHei',system-ui,sans-serif" font-size="24" fill="#51617a">放哪，哪就是知识库 · Drop a folder, get a knowledge base.</text>
+  <!-- 标语：中英交替 -->
+  <g font-family="'Segoe UI','PingFang SC','Microsoft YaHei',system-ui,sans-serif" font-size="24" text-anchor="middle">
+    <text class="anim-zh" x="480" y="226" fill="#51617a">放哪，哪就是知识库</text>
+    <text class="anim-en" x="480" y="226" fill="#51617a" opacity="0">Drop a folder, get a knowledge base.</text>
+  </g>
+
+  <rect x="1.5" y="1.5" width="957" height="277" rx="15" fill="none" stroke="#d4e0f2"/>
 </svg>

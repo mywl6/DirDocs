@@ -8,7 +8,7 @@
 
   <p>
     <img alt="PHP" src="https://img.shields.io/badge/PHP-7.1%E2%80%938.4-777BB4?logo=php&logoColor=white&style=flat-square">
-    <img alt="License" src="https://img.shields.io/badge/License-MIT-2ea44f?style=flat-square">
+    <img alt="License" src="https://img.shields.io/badge/License-AGPL_v3.0-blue?style=flat-square">
     <img alt="Database" src="https://img.shields.io/badge/Database-none-2ea44f?style=flat-square">
     <img alt="Build" src="https://img.shields.io/badge/Build%20step-none-2ea44f?style=flat-square">
     <img alt="Third-party requests" src="https://img.shields.io/badge/3rd%20party%20requests-zero%2A-2ea44f?style=flat-square">
@@ -377,4 +377,14 @@ Every mechanism is listed in the open — verify each against the source:
 
 ## License / 许可
 
-MIT
+**AGPL-3.0**（完整文本见 [LICENSE](LICENSE)）。
+
+使用、修改、分发本代码，或将其（含修改版）部署为对外提供服务的站点，都必须以同一协议
+开源完整源码。想以闭源形式集成或提供服务，需另行获得作者商业授权。
+
+**AGPL-3.0** (full text in [LICENSE](LICENSE)).
+
+Using, modifying or redistributing this code — or deploying it (modified or not) as a
+service others interact with — requires open-sourcing the full source under the same
+license. For closed-source integration or hosted service, a separate commercial license
+from the author is required.
