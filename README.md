@@ -80,12 +80,14 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
 
 ## 部署
 
-把 `index.php` 拷进目标目录，访问一下即用：
+把 `index.php` 与 `_dir/` 拷进目标目录，访问一下即用
+（[Releases](https://github.com/mywl6/DirDocs/releases/latest) 的 zip 解压即是这两样）：
 
 ```
 你的目录/
-├── index.php        ← 拷这一个文件进去（之后永远不用再动它）
-├── _dir/            ← 首次访问自动生成（程序代码 + 你的数据）
+├── index.php        ← 入口：boot + 路由分发，部署后极少改动
+├── _dir/            ← 程序本体，随包分发（升级覆盖 lib/ 与 assets/）
+│                       config.php、cache/ 等运行时数据首次访问自动生成
 ├── 项目A/
 │   ├── 说明.md
 │   └── 架构图.png
@@ -260,12 +262,15 @@ None of the above relies on any cloud service. It stands on a deliberately modes
 
 ## Deploy
 
-Copy `index.php` into the target directory and visit it — done:
+Copy `index.php` and `_dir/` into the target directory and visit it — done
+(the zip from [Releases](https://github.com/mywl6/DirDocs/releases/latest) is exactly these two):
 
 ```
 your-dir/
-├── index.php        ← copy this one file in (never touch it again)
-├── _dir/            ← auto-generated on first visit (program code + your data)
+├── index.php        ← entry: boot + routing, rarely touched after deploy
+├── _dir/            ← the program itself, ships with the package (upgrades overwrite
+│                       lib/ and assets/); runtime data (config.php, cache/) is
+│                       auto-generated on first visit
 ├── ProjectA/
 │   ├── overview.md
 │   └── architecture.png

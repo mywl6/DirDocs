@@ -159,7 +159,9 @@ function md_canonical_for($rel, $type, $cfg)
  */
 function md_meta_description($contentHtml, $limit = 150)
 {
-    $text = trim(preg_replace('/\s+/u', ' ', strip_tags($contentHtml)));
+    // 渲染器把文档里的原始 HTML 块转义输出（&lt;div …&gt;），只剥标签会把标签源码当正文
+    // 抓进描述（v1.17.1 修复）：先实体解码还原成真标签，再一并剥掉
+    $text = trim(preg_replace('/\s+/u', ' ', strip_tags(html_entity_decode($contentHtml, ENT_QUOTES, 'UTF-8'))));
     if ($text === '') {
         return '';
     }

@@ -14,15 +14,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 提取 CHANGELOG 中本版本段落作为发布说明
+      - name: 组装发布说明（部署头部 + CHANGELOG 本版本段落）
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           awk -v ver="v$VERSION" '
             $0 ~ ("^## " ver "( |$)") {found = 1; next}
             /^## / {found = 0}
             found
-          ' CHANGELOG.md > release_notes.md
-          [ -s release_notes.md ] || echo "详见 [CHANGELOG.md](CHANGELOG.md)。" > release_notes.md
+          ' CHANGELOG.md > /tmp/section.md
+          [ -s /tmp/section.md ] || echo "详见 [CHANGELOG.md](CHANGELOG.md)。" > /tmp/section.md
+          cat .github/release-header.md /tmp/section.md > release_notes.md
 
       - name: 打包并创建 Release
         env:

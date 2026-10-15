@@ -29,7 +29,7 @@ ini_set('display_errors', '0');   // 错误进日志，不回显（避免路径/
 
 // ---------------------------------------------------------------- boot
 
-define('MD_VERSION', '1.17.0');
+define('MD_VERSION', '1.17.1');
 define('MD_ROOT', realpath(__DIR__));
 define('MD_DIR', MD_ROOT . '/_dir');
 define('MD_DIRNAME', '_dir');
