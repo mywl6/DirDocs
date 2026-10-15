@@ -36,11 +36,10 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
 
 ## 界面一览
 
-| 首页 · 浅色 | 首页 · 深色 |
-|---|---|
-| [![首页浅色](.github/assets/home-light.svg)](.github/assets/home-light.svg) | [![首页深色](.github/assets/home-dark.svg)](.github/assets/home-dark.svg) |
-| **全站搜索（Ctrl+K）** | **最近更新** |
-| [![搜索弹窗](.github/assets/search-dark.svg)](.github/assets/search-dark.svg) | [![最近更新](.github/assets/recent-light.svg)](.github/assets/recent-light.svg) |
+<div align="center">
+  <img src=".github/assets/ui-tour.svg" alt="DirDocs 界面导览" width="880">
+  <p><sub>自动轮播：首页浅色 → 深色 → Ctrl+K 全站搜索 → 最近更新</sub></p>
+</div>
 
 ## 为什么对 AI 时代的文档刚好
 
@@ -94,6 +93,7 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
 
 **升级**：用新版本的 `_dir/lib/` 与 `_dir/assets/` 覆盖旧的两个目录即可，
 `index.php` 不用动。你的数据（`_dir/config.php`、`_dir/cache/`、`_dir/themes/`）不会被覆盖。
+各版本变更见 [CHANGELOG.md](CHANGELOG.md)。
 
 **瘦身**：不需要 mermaid 图表就删掉 `_dir/assets/vendor/mermaid.min.js`（约 3.2MB）——
 运行时会自动探测，图表块以源码形态显示，其余功能零影响；后台概览会提示缺失。
@@ -201,11 +201,10 @@ into the folder, it is already in the knowledge base.
 
 ## Screenshots
 
-| Home · light | Home · dark |
-|---|---|
-| [![Home light](.github/assets/home-light.svg)](.github/assets/home-light.svg) | [![Home dark](.github/assets/home-dark.svg)](.github/assets/home-dark.svg) |
-| **Site-wide search (Ctrl+K)** | **Recent updates** |
-| [![Search palette](.github/assets/search-dark.svg)](.github/assets/search-dark.svg) | [![Recent updates](.github/assets/recent-light.svg)](.github/assets/recent-light.svg) |
+<div align="center">
+  <img src=".github/assets/ui-tour.svg" alt="DirDocs UI tour" width="880">
+  <p><sub>Auto-cycling: home (light) → home (dark) → Ctrl+K search → recent updates</sub></p>
+</div>
 
 ## Why it fits AI-era docs
 
@@ -271,7 +270,7 @@ At the web root, the whole root is the docs; under `/docs/`, that level is the s
 
 **Upgrading**: overwrite the old `_dir/lib/` and `_dir/assets/` with the new versions —
 `index.php` stays untouched, and so does your data (`_dir/config.php`, `_dir/cache/`,
-`_dir/themes/`).
+`_dir/themes/`). Per-version changes: [CHANGELOG.md](CHANGELOG.md) (Chinese).
 
 **Slimming**: don't need mermaid diagrams? Delete `_dir/assets/vendor/mermaid.min.js`
 (~3.2 MB) — the runtime detects its absence, chart blocks render as source code, and
