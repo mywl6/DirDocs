@@ -38,15 +38,9 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
 
 **主题切换**（浅色 ⇄ 深色）
 
-<video src=".github/assets/theme-toggle.mp4" controls width="640"></video>
+![DirDocs 界面导览](.github/assets/ui-tour.gif)
 
-**全站搜索**（Ctrl+K）
-
-<video src=".github/assets/search.mp4" controls width="640"></video>
-
-**最近更新**
-
-<video src=".github/assets/recent.mp4" controls width="640"></video>
+<sub>自动轮播：主题切换（浅色 ⇄ 深色）→ Ctrl+K 全站搜索 → 最近更新　|　▶ 高清视频：[主题切换](.github/assets/theme-toggle.mp4) · [全站搜索](.github/assets/search.mp4) · [最近更新](.github/assets/recent.mp4)</sub>
 
 ## 为什么对 AI 时代的文档刚好
 
@@ -210,15 +204,9 @@ into the folder, it is already in the knowledge base.
 
 **Theme switching** (light ⇄ dark)
 
-![Theme switching](.github/assets/theme-toggle.mp4)
+![DirDocs UI tour](.github/assets/ui-tour.gif)
 
-**Site-wide search** (Ctrl+K)
-
-![Site-wide search](.github/assets/search.mp4)
-
-**Recent updates**
-
-![Recent updates](.github/assets/recent.mp4)
+<sub>Auto-cycling: theme switching (light ⇄ dark) → Ctrl+K search → recent updates　|　▶ HD videos: [theme](.github/assets/theme-toggle.mp4) · [search](.github/assets/search.mp4) · [recent](.github/assets/recent.mp4)</sub>
 
 ## Why it fits AI-era docs
 
