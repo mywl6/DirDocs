@@ -38,15 +38,15 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
 
 **主题切换**（浅色 ⇄ 深色）
 
-![主题切换](.github/assets/theme-toggle.mp4)
+<video src=".github/assets/theme-toggle.mp4" controls width="640"></video>
 
 **全站搜索**（Ctrl+K）
 
-![全站搜索](.github/assets/search.mp4)
+<video src=".github/assets/search.mp4" controls width="640"></video>
 
 **最近更新**
 
-![最近更新](.github/assets/recent.mp4)
+<video src=".github/assets/recent.mp4" controls width="640"></video>
 
 ## 为什么对 AI 时代的文档刚好
 
