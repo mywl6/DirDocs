@@ -4,10 +4,18 @@
  * 主题即代码（WordPress/Typecho 模式）：安装主题 = 安装代码，请只安装可信来源。
  * 本文件由 md_page() 在定义完上下文变量后 include，可用变量见开发文档「主题包规范」：
  *   $cfg $ctx $theme $mode $lang $home $searchUrl $recentUrl $q $tocHtml $cdn
- *   $mermaidUrl $hasAdmin $headAssets 以及常量 MD_VERSION；
+ *   $mermaidUrl $hasAdmin $headAssets $themeUrl $adminUrl
+ *   $themeOptions（主题选项取值，键见 theme.php 的 options 声明；也可用 md_theme_option($theme,'键')）
+ *   以及常量 MD_VERSION；
  *   助手函数 md_e/md_t/md_url_for 可用（界面文案一律经 md_t 取词，勿写死文案）。
  *   <html lang> 输出 $lang；<html> 带 md_i18n_js_attr() 的 data-md-i18n 属性（JS 文案词典）。
  *   <head> 里输出 $ctx['html_title'] 与 $ctx['head_meta']（SEO 标签由 md_page 统一组装）。
+ *
+ * 【内置包】同一份内容出现在两处：
+ *   _dir/lib/builtin-themes/default/view.php   权威副本（读模板只看这里，随 _dir/lib/ 升级）
+ *   _dir/themes/default/view.php               运行期镜像（后台动作自动同步，给人看的）
+ * 改任何一份都会在下一次打开后台时被权威副本覆盖回来。想改版式请整套复制到
+ * _dir/themes/<你自己的名字>/ 再改（自建主题永不被程序动），别改 default/wiki 这两个名字。
  */
 if (!defined('MD_BOOT')) {
     http_response_code(403);
@@ -89,6 +97,9 @@ if (!defined('MD_BOOT')) {
   <main class="md-main flex-grow-1 d-flex justify-content-center px-2 px-md-3" id="md-content">
     <div class="md-stage-col">
     <?php echo isset($ctx['risk_html']) ? $ctx['risk_html'] : ''; ?>
+    <?php if (!empty($themeOptions['notice'])): /* 站点公告：主题选项（后台「主题」页填写），留空不显示 */ ?>
+    <div class="alert alert-warn md-notice" role="note"><?php echo nl2br(md_e($themeOptions['notice'])); ?></div>
+    <?php endif; ?>
     <div class="doc-stage">
     <?php echo $ctx['breadcrumbs']; ?>
     <?php echo isset($ctx['bylines_html']) ? $ctx['bylines_html'] : ''; ?>
@@ -103,6 +114,9 @@ if (!defined('MD_BOOT')) {
       <?php endif; ?>
       <footer class="md-footer-meta">
         <span>Powered by <a href="<?php echo md_e(md_project_url()); ?>" target="_blank" rel="noopener" title="<?php echo md_e(md_t('powered_by_title')); ?>"><i class="bi bi-github" aria-hidden="true"></i>DirDocs <?php echo md_e(MD_VERSION); ?></a></span>
+        <?php if (!empty($themeOptions['footer_note'])): /* 页脚补充信息：主题选项，可填备案号等 */ ?>
+        <span class="md-footer-note"><?php echo md_e($themeOptions['footer_note']); ?></span>
+        <?php endif; ?>
         <span class="md-footer-links">
           <?php if ($hasAdmin): ?>
             <?php if (!empty($ctx['edit_url'])): ?><a href="<?php echo md_e($ctx['edit_url']); ?>"><i class="bi bi-pencil-square" aria-hidden="true"></i><?php echo md_e(md_t('edit_this_page')); ?></a><?php endif; ?>

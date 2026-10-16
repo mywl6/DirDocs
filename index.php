@@ -15,7 +15,7 @@
  *   md_i18n.php    多语言（界面语言解析/md_t 取词/JS 文案词典）
  *   md_pages.php   前台（页面动作/模板辅助/附件/风险检测）
  *   md_theme.php   主题（CSS 变量/页面模板/用户主题）
- *   md_admin.php   后台（鉴权/界面/四功能/分发）
+ *   md_admin.php   后台（鉴权/界面/多页/分发）
  * 版本号数据文件：_dir/lib/version.php（随 lib 覆盖升级；本文件里的串只是兜底）。
  * 内置样式与行为脚本在 _dir/assets/（builtin.css / builtin.js / theme-init.js，后台另有 admin.css / admin.js），
  * 三方前端库（Bootstrap/图标/mermaid/qrcode）自托管在 _dir/assets/vendor/，运行时零外部请求。
@@ -39,7 +39,7 @@ define('MD_BOOT', 1);
  * 本文件里的串只作兜底。版本号必须落在升级会覆盖的位置——否则只更新 lib/ 的安装
  * 永远停在旧版本号上，新版本检查会一直提示「有新版」而升级后依旧。
  */
-$md_version = '1.18.0';
+$md_version = '1.19.0';
 $md_verfile = __DIR__ . '/_dir/lib/version.php';
 if (is_file($md_verfile)) {
     $md_v = @include $md_verfile;
@@ -50,6 +50,7 @@ if (is_file($md_verfile)) {
 }
 define('MD_VERSION', $md_version);
 unset($md_version, $md_verfile, $md_v);
+
 define('MD_ROOT', realpath(__DIR__));
 define('MD_DIR', MD_ROOT . '/_dir');
 define('MD_DIRNAME', '_dir');

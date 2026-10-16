@@ -22,4 +22,10 @@
 /_dir/config.php
 /_dir/.htaccess
 
+# 内置主题包（default / wiki）的运行期镜像：权威副本在 _dir/lib/builtin-themes/（随库发布），
+# 这里的副本由 md_theme_seed() 按 lib 负载自动同步覆盖（内容不一致就重写、负载里没有的清掉）。
+# 它们是生成物，不入库；ocean（示例主题）与用户自建目录照常入库/保留。
+/_dir/themes/default/
+/_dir/themes/wiki/
+
 # 评论数据与文档同目录存放（<文档名>.cmt.php），位于白名单之外，天然不入库。

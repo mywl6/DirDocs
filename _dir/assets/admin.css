@@ -437,3 +437,37 @@
   border-color:transparent;text-decoration:none;
 }
 .admin-upd-badge:hover{color:var(--accent);background:var(--accent-weak);filter:brightness(.96)}
+
+/* ---- 主题页（v1.19.0）：主题选项控件 ---- */
+/* 选项网格：多行文本框占满整行，其余按字段宽度自适应 */
+.admin-main .md-th-field-wide{grid-column:1/-1}
+/* 标签行：显示名 + 类型徽标（徽标在 label 之外，避免并入控件的可访问名） */
+.md-th-label{display:flex;align-items:baseline;gap:.4rem;margin-bottom:.35rem}
+.md-th-label>label{font-size:.78rem;font-weight:600;color:var(--text2)}
+.md-th-type{
+  margin-left:.4rem;padding:0 5px;border-radius:999px;
+  font-size:.62rem;font-weight:600;letter-spacing:.04em;
+  color:var(--text3);background:var(--bg);border:1px solid var(--border);
+}
+/* 颜色：文本框 + 取色器并排（取色器只把选到的色同步回文本框） */
+.md-th-color{display:flex;gap:.4rem;align-items:center}
+.md-th-color-hex{flex:1;min-width:0;font-family:var(--mono);font-size:.82rem}
+.md-th-color-swatch{
+  flex:0 0 auto;width:34px;height:30px;padding:2px;
+  border:1px solid var(--border);border-radius:var(--radius-sm);
+  background:var(--surface);cursor:pointer;
+}
+.md-th-color-swatch::-webkit-color-swatch-wrapper{padding:0}
+.md-th-color-swatch::-webkit-color-swatch{border:none;border-radius:5px}
+.md-th-color-swatch::-moz-color-swatch{border:none;border-radius:5px}
+/* 数值 + 单位后缀 */
+.md-th-num{display:flex;gap:.4rem;align-items:center}
+.md-th-num .input{flex:1;min-width:0}
+.md-th-unit{flex:0 0 auto;color:var(--text3);font-size:.8rem}
+/* 开关：勾选框 + 文字（.admin-checks 是横向多列的，单选一行用这个） */
+.md-th-toggle{display:flex;align-items:center;gap:.45rem;font-size:.85rem;cursor:pointer;padding-top:.15rem}
+.md-th-toggle input{width:15px;height:15px;accent-color:var(--accent);margin:0}
+/* 当前主题标记（主题包清单表） */
+.admin-now-badge{margin-left:.4rem;color:var(--accent);background:var(--accent-weak);border-color:transparent}
+/* 主题包清单：目录列在窄屏会被压成竖排，允许换行并给个下限 */
+.admin-main .admin-th-pack-dir{min-width:11em}

@@ -102,6 +102,7 @@ return array(
     'admin_nav_docs'      => 'Documents',
     'admin_nav_attach'    => 'Attachments',
     'admin_nav_cache'     => 'Cache',
+    'admin_nav_theme'     => 'Theme',
     'admin_nav_settings'  => 'Settings',
     'admin_open_nav'      => 'Open navigation',
     'admin_view_site'     => 'View site',
@@ -153,6 +154,7 @@ return array(
     'admin_recent_empty'  => 'No documents yet. Create the first one on the Documents page.',
     'admin_th_path'       => 'Path',
     'admin_th_mtime'      => 'Modified',
+    'admin_th_time'       => 'Time',
     'admin_th_actions'    => 'Actions',
     'admin_th_size'       => 'Size',
     'admin_view'          => 'View',
@@ -448,6 +450,46 @@ return array(
         . 'folder. This only silences the warning — the files still stay out of the document tree and are never served by this program.',
     'admin_save_settings' => 'Save settings',
 
+    // ---- Admin: theme page (v1.19.0; split out of Settings + theme options) ----
+    'admin_th_pick'         => 'Style pack & display mode',
+    'admin_th_flash_theme'  => 'Theme settings saved.',
+    'admin_th_flash_opt'    => 'Theme options saved.',
+    'admin_th_flash_reset'  => 'Theme option values cleared; back to the palette shipped with the theme.',
+    'admin_th_opts_title'   => 'Theme options · {theme}',
+    'admin_th_opts_none'    => 'The current theme declares no options. A theme pack declares them with <code>options</code> in '
+        . '<code>theme.php</code> (types: text / textarea / select / toggle / color / number); the matching controls then appear '
+        . 'on this page. Option values can map onto CSS variables automatically, or be read by <code>view.php</code> through '
+        . '<code>md_theme_option()</code>. The built-in default / wiki themes ship six sample options to copy from.',
+    'admin_th_opts_hint'    => 'Values are stored per theme (switching away and back keeps them). Empty = inherit the palette shipped '
+        . 'with the theme, writing no overrides at all.',
+    'admin_th_opt_inherit'  => 'Empty = inherit theme',
+    'admin_th_opt_bad'      => 'These option values are invalid, nothing was saved: {list}',
+    'admin_th_opt_maps'     => 'Writes CSS variables:',
+    'admin_th_reset'        => 'Reset to theme defaults',
+    'admin_th_reset_hint'   => 'Clear every option value stored for this theme',
+    'admin_th_reset_confirm_js' => 'Clear every option value stored for this theme?',
+    'admin_th_type_text'     => 'text',
+    'admin_th_type_textarea' => 'multiline',
+    'admin_th_type_select'   => 'select',
+    'admin_th_type_toggle'   => 'toggle',
+    'admin_th_type_color'    => 'color',
+    'admin_th_type_number'   => 'number',
+    'admin_th_toggle_on'     => 'Enabled',
+    'admin_th_pick_color'    => 'Color picker (syncs into the text field)',
+    'admin_th_packs'        => 'Theme packs',
+    'admin_th_th_name'      => 'Theme',
+    'admin_th_th_dir'       => 'Directory',
+    'admin_th_th_view'      => 'Page template',
+    'admin_th_th_opts'      => 'Options',
+    'admin_th_current'      => 'current',
+    'admin_th_view_own'     => 'Own view.php (independent layout)',
+    'admin_th_view_shared'  => 'Shares the default layout (palette-only pack)',
+    'admin_th_opt_count'    => '{n}',
+    'admin_th_opt_zero'     => '—',
+    'admin_th_packs_hint'   => 'To add a theme: create a directory under <code>_dir/themes/</code> with a <code>theme.php</code> '
+        . '(<code>name</code> display name, <code>vars</code> / <code>vars-dark</code> palettes for light and dark, optional '
+        . '<code>options</code> declarations). Add a full-page <code>view.php</code> template for a completely different layout. '
+        . 'Themes are code — install trusted sources only.',
     'admin_pretty_title'  => 'Rewrite rules',
     'admin_pretty_hint'   => 'Add the rules below to your server configuration (adjust the prefix to your install path). Make '
         . 'sure to drop <code>$uri/</code>, or directory pages hit autoindex and return 403.',

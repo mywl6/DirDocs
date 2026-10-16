@@ -4,12 +4,19 @@
  *
  * v2「高级技术文档主题」：前台基于 Bootstrap 5.3 + Bootstrap Icons（v1.12.0 起全资源
  * 自托管于 _dir/assets/vendor/，零外部请求），builtin.css 是 Bootstrap 之上的 DirDocs 覆盖层。
+ * v1.19.0 起主题可声明「主题选项」（theme.php 的 options）：站长在后台「主题」页填写，
+ * 值可映射到 CSS 变量（浅/深两套）或由 view.php 经 md_theme_option() 读取。
  */
 if (!defined('MD_BOOT')) {
     http_response_code(403);
     header('Content-Type: text/html; charset=utf-8');
     echo '<h1>403</h1>';
     exit;
+}
+
+/** 单个主题可声明的选项条数上限（后台表单与配置体积都要收口）。 */
+if (!defined('MD_THEME_OPTIONS_MAX')) {
+    define('MD_THEME_OPTIONS_MAX', 40);
 }
 
 // ---------------------------------------------------------------- 全站静态资源（自托管）
@@ -40,12 +47,14 @@ function md_cdn_active($cfg = null)
 // ---------------------------------------------------------------- 主题包系统
 
 /**
- * 主题模型（2026-10-14 定版）：
+ * 主题模型（2026-10-14 定版；2026-10-16 内置包改程序侧权威副本）：
  *   主题 = _dir/themes/<名称>/theme.php 完整风格包（name + 浅色 vars + 深色 vars-dark，
  *          可选 view.php 整页模板覆盖、assets/ 主题资产），用户可自建风格完全不同的主题；
  *   显示模式 = config.mode（auto/light/dark），与主题解耦——任何主题都自带深浅两套色板。
- * 内置 default / wiki 两个包：可写时自动播种到 themes/（升级会覆盖内置包），
- * 不可写时使用下面硬编码的同份色板兜底（零配置保证不变）。
+ * 内置 default / wiki 两个包放在 _dir/lib/builtin-themes/（随 lib 升级覆盖）：升级只覆盖
+ * _dir/lib/ 就会带来新版版式与配色，_dir/themes/ 下同名的残留副本一律不再读取。
+ * 本函数里的同份色板是「lib 负载缺失/不可读」时的兜底（零配置保证不变），
+ * 与程序侧包文件的一致性由测试断言守住（tests/group_theme.php）。
  */
 function md_theme_builtin_manifests()
 {
@@ -102,7 +111,70 @@ function md_theme_builtin_manifests()
         '--bs-link-color' => '#5eead4', '--bs-link-color-rgb' => '94,234,212',
         '--bs-link-hover-color' => '#8ef5e4',
     ));
+    // 内置包不走 manifest_check（它只作用于 themes/ 下的用户包），选项声明在这里就归一化，
+    // 保证「内置兜底」与「播种出来的包文件」形态一致
+    $default['options'] = md_theme_options_check(md_theme_builtin_options_default());
+    $wiki['options'] = $default['options'];
     return array('default' => $default, 'wiki' => $wiki);
+}
+
+/**
+ * 内置主题（default / wiki）声明的选项：既是开箱可用的设置项，也是主题作者的活样例——
+ * 六种类型各一条（选择/颜色/开关/数值/文本/多行文本），演示 css / css_rgb / css_tpl 三种映射。
+ * 全部留空即「跟随主题色板」，站长不填任何一项时行为与旧版完全一致。
+ */
+function md_theme_builtin_options_default()
+{
+    return array(
+        // 选择：影响整站圆角（含卡片与按钮），映射一组变量
+        array(
+            'key' => 'radius', 'type' => 'select', 'label' => '圆角风格', 'default' => '',
+            'hint' => '留空跟随主题默认（12px）',
+            'choices' => array(
+                '' => array('label' => '跟随主题'),
+                'none' => array('label' => '直角（无圆角）', 'css' => array(
+                    '--radius' => '0px', '--radius-sm' => '0px',
+                    '--bs-border-radius' => '0px', '--bs-border-radius-sm' => '0px')),
+                'small' => array('label' => '小圆角', 'css' => array(
+                    '--radius' => '8px', '--radius-sm' => '6px',
+                    '--bs-border-radius' => '8px', '--bs-border-radius-sm' => '6px')),
+                'large' => array('label' => '大圆角', 'css' => array(
+                    '--radius' => '18px', '--radius-sm' => '12px',
+                    '--bs-border-radius' => '18px', '--bs-border-radius-sm' => '12px')),
+            ),
+        ),
+        // 颜色：主色，同时写色值、RGB 三元组与弱化底色（演示三种变量形态）
+        array(
+            'key' => 'accent', 'type' => 'color', 'label' => '主题主色', 'default' => '',
+            'hint' => '链接、按钮与强调色；留空用主题自带主色',
+            'css' => array('--accent', '--bs-primary', '--bs-link-color'),
+            'css_rgb' => array('--bs-primary-rgb', '--bs-link-color-rgb'),
+            'css_tpl' => array('--accent-weak' => 'rgba({rgb},.12)', '--mark-bg' => 'rgba({rgb},.22)'),
+        ),
+        // 开关：打开即写入 on 的值，关闭时不写（跟随主题色板）
+        array(
+            'key' => 'flat', 'type' => 'toggle', 'label' => '扁平化（去掉卡片阴影）', 'default' => false,
+            'hint' => '关闭时跟随主题自带的阴影效果',
+            'css' => array('--shadow', '--paper-shadow'), 'on' => 'none',
+        ),
+        // 数值：正文栏宽，带单位（px）与范围
+        array(
+            'key' => 'content_w', 'type' => 'number', 'label' => '正文栏宽', 'default' => '',
+            'hint' => '留空用主题默认（860）；680~1440，宽屏可调大',
+            'min' => '680', 'max' => '1440', 'step' => '20',
+            'css' => array('--content-w'), 'unit' => 'px',
+        ),
+        // 文本：页脚备案/版权信息（view.php 经 md_theme_option 读取）
+        array(
+            'key' => 'footer_note', 'type' => 'text', 'label' => '页脚补充信息', 'default' => '',
+            'hint' => '显示在页脚版权行旁，如备案号；留空不显示',
+        ),
+        // 多行文本：站点公告（同上，模板读取）
+        array(
+            'key' => 'notice', 'type' => 'textarea', 'label' => '站点公告', 'default' => '',
+            'hint' => '显示在首页/文档页顶部；留空不显示',
+        ),
+    );
 }
 
 /** 色板值白名单：颜色/数值/字体栈够用；禁分号花括号冒号（CSS 注入与 url() 一律进不来）。 */
@@ -110,6 +182,434 @@ function md_theme_var_ok($v)
 {
     return is_string($v) && $v !== '' && strlen($v) <= 300
         && preg_match('/^[#A-Za-z0-9 .,()%\\-\'"]+$/', $v) === 1;
+}
+
+// ---------------------------------------------------------------- 主题选项（v1.19.0）
+
+/**
+ * 主题选项模型：主题包在 theme.php 里声明 options（数组，每条一个选项），
+ * 站长在后台「主题」页填写，取值按主题分别存进 config.theme_options[主题名][键]。
+ *
+ * 声明字段：
+ *   key     选项键（小写字母/数字/下划线/连字符，1~32 位；存储与模板读取都用它）
+ *   type    text | textarea | select | toggle | color | number
+ *   label   显示名（≤60 字节，缺省用键名）
+ *   hint    说明文字（≤200 字节，可省）
+ *   default 默认值（按类型校验，非法回落到该类型的中性默认）
+ *   css     该选项值写入的 CSS 变量名（字符串或数组）：浅色块生效，深色块同样写入
+ *   css_dark 深色块单独写入的变量名（给了就以它为准，浅色块仍用 css）
+ *   css_rgb 仅 color：把该色的 RGB 三元组（如 37,99,235）写入这些变量
+ *           （Bootstrap 的 --bs-primary-rgb / --bs-link-color-rgb 需要这个形态）
+ *   css_tpl 仅 color：变量名 => 值模板（{value} 原值 / {hex} 色值 / {rgb} 三元组），
+ *           用于 rgba({rgb},.12) 这类派生值
+ *   select 专属：choices（值 => 显示名，或 值 => array('label'=>..,'css'=>..)）；
+ *                css 可写「变量名列表 + 单值」或直接写「变量名 => 值」映射
+ *   number 专属：min / max / step / unit（单位仅用于显示与 CSS 输出）
+ *   toggle 专属：on / off（开关为真/假时写入 css 变量的值；未给 off 则关掉时不写、沿用主题色板）
+ *
+ * 取值语义：空串 = 未设置 = 不覆盖主题色板（模板读取时回落声明默认）；toggle 恒存布尔。
+ * 安全：所有值在读取时按声明重新校验；写进 CSS 前再过一遍 md_theme_var_ok（禁分号/花括号/冒号）。
+ */
+function md_theme_option_types()
+{
+    return array('text', 'textarea', 'select', 'toggle', 'color', 'number');
+}
+
+/** 变量名列表归一化（css / css_dark / css_rgb 共用）：非法项剔除。 */
+function md_theme_opt_var_list($v)
+{
+    $out = array();
+    foreach ((array)$v as $name) {
+        if (is_string($name) && preg_match('/^--[a-z0-9-]{1,40}$/i', $name) === 1) {
+            $out[] = $name;
+        }
+    }
+    return $out;
+}
+
+/**
+ * 单值校验与归一化：返回归一化值，非法返回 false。
+ * 空串一律合法（= 未设置 = 跟随主题默认），toggle 归一为布尔。
+ */
+function md_theme_option_value($decl, $raw)
+{
+    $type = isset($decl['type']) ? (string)$decl['type'] : '';
+    if ($type === 'toggle') {
+        return is_bool($raw) ? $raw : !empty($raw);
+    }
+    if (!is_scalar($raw)) {
+        return false;
+    }
+    $v = (string)$raw;
+    if ($type === 'textarea') {
+        $v = trim(str_replace(array("\r\n", "\r"), "\n", $v));
+        if (strlen($v) > 2000) {
+            return false;
+        }
+        // 控制字符剔除例外：换行与制表符保留（多行说明文字要用）
+        return preg_match('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', $v) === 1 ? false : $v;
+    }
+    if ($type === 'text') {
+        $v = trim(str_replace(array("\r", "\n"), ' ', $v));
+        if (strlen($v) > 200) {
+            return false;
+        }
+        return preg_match('/[\x00-\x1F\x7F]/', $v) === 1 ? false : $v;
+    }
+    if ($type === 'color') {
+        $v = strtolower(trim($v));
+        if ($v === '') {
+            return '';
+        }
+        return preg_match('/^#([0-9a-f]{3}|[0-9a-f]{6})$/', $v) === 1 ? $v : false;
+    }
+    if ($type === 'number') {
+        $v = trim($v);
+        if ($v === '') {
+            return '';
+        }
+        if (preg_match('/^-?\d+(\.\d+)?$/', $v) !== 1) {
+            return false;
+        }
+        $n = (float)$v;
+        if (isset($decl['min']) && $decl['min'] !== '' && $n < (float)$decl['min']) {
+            return false;
+        }
+        if (isset($decl['max']) && $decl['max'] !== '' && $n > (float)$decl['max']) {
+            return false;
+        }
+        return ($n == (int)$n) ? (string)(int)$n : rtrim(rtrim(sprintf('%.4F', $n), '0'), '.');
+    }
+    if ($type === 'select') {
+        $v = trim($v);
+        if ($v === '') {
+            return '';
+        }
+        return isset($decl['choices'][$v]) ? $v : false;
+    }
+    return false;
+}
+
+/** #abc / #aabbcc → '170,187,204'（RGB 伴生变量用）；形态不对返回空串。 */
+function md_theme_hex_rgb($hex)
+{
+    $h = ltrim(strtolower((string)$hex), '#');
+    if (strlen($h) === 3) {
+        $h = $h[0] . $h[0] . $h[1] . $h[1] . $h[2] . $h[2];
+    }
+    if (strlen($h) !== 6 || preg_match('/^[0-9a-f]{6}$/', $h) !== 1) {
+        return '';
+    }
+    return hexdec(substr($h, 0, 2)) . ',' . hexdec(substr($h, 2, 2)) . ',' . hexdec(substr($h, 4, 2));
+}
+
+/** 单条选项声明的校验与归一化；非法返回 false（整条丢弃，不影响主题包其他部分）。 */
+function md_theme_option_check($o)
+{
+    if (!is_array($o)) {
+        return false;
+    }
+    $key = isset($o['key']) && is_string($o['key']) ? (string)$o['key'] : '';
+    if (preg_match('/^[a-z0-9][a-z0-9_-]{0,31}$/', $key) !== 1) {
+        return false;
+    }
+    $type = isset($o['type']) && is_string($o['type']) ? strtolower((string)$o['type']) : '';
+    if (!in_array($type, md_theme_option_types(), true)) {
+        return false;
+    }
+    $label = isset($o['label']) && is_string($o['label']) ? trim((string)$o['label']) : '';
+    if ($label === '') {
+        $label = $key;                                  // 缺显示名用键名兜底，不整条丢弃
+    } elseif (strlen($label) > 60) {
+        $label = $key;
+    }
+    $hint = isset($o['hint']) && is_string($o['hint']) ? trim((string)$o['hint']) : '';
+    if (strlen($hint) > 200) {
+        $hint = '';
+    }
+    $c = array(
+        'key' => $key, 'type' => $type, 'label' => $label, 'hint' => $hint, 'default' => '',
+        'css' => md_theme_opt_var_list(isset($o['css']) ? $o['css'] : array()),
+        // css_dark 显式声明过（哪怕是空数组）= 深色块单独处理；没声明 = 深色块沿用 css。
+        // 「声明但是空数组」是主题作者的出口：某项只该影响浅色，深色仍用主题色板。
+        'css_dark' => md_theme_opt_var_list(isset($o['css_dark']) ? $o['css_dark'] : array()),
+        'css_dark_set' => array_key_exists('css_dark', $o),
+        'css_rgb' => md_theme_opt_var_list(isset($o['css_rgb']) ? $o['css_rgb'] : array()),
+        'css_tpl' => array(),
+    );
+    // css_tpl：变量名 => 值模板（{value} 原值 / {hex} 色值补全 / {rgb} 三元组）。
+    // 用于颜色选项的「弱化底色」形态（rgba(r,g,b,.12)）——单靠明文映射表达不了。
+    if (isset($o['css_tpl']) && is_array($o['css_tpl'])) {
+        foreach ($o['css_tpl'] as $tplName => $tpl) {
+            if (!is_string($tplName) || preg_match('/^--[a-z0-9-]{1,40}$/i', $tplName) !== 1
+                || !is_string($tpl) || strlen($tpl) > 120) {
+                continue;
+            }
+            $c['css_tpl'][$tplName] = $tpl;
+            if (count($c['css_tpl']) >= 8) {
+                break;
+            }
+        }
+    }
+    if ($type === 'toggle') {
+        $c['default'] = !empty($o['default']);
+        foreach (array('on', 'off') as $k) {
+            $c[$k] = (isset($o[$k]) && is_string($o[$k]) && md_theme_var_ok($o[$k])) ? (string)$o[$k] : '';
+        }
+        return $c;
+    }
+    if ($type === 'select') {
+        $choices = array();
+        $cssMap = array();
+        if (!isset($o['choices']) || !is_array($o['choices']) || !$o['choices']) {
+            return false;                               // 下拉没有可选项 → 整条丢弃
+        }
+        foreach ($o['choices'] as $ck => $cl) {
+            // 允许空值键：'' = 「跟随主题」这一分支（下拉留空即不覆盖色板）
+            if (!is_string($ck) || ($ck !== '' && preg_match('/^[a-z0-9][a-z0-9_-]{0,31}$/', $ck) !== 1)) {
+                continue;
+            }
+            $lab = '';
+            $css = '';
+            if (is_string($cl)) {
+                $lab = trim($cl);
+            } elseif (is_array($cl)) {
+                $lab = isset($cl['label']) && is_string($cl['label']) ? trim($cl['label']) : '';
+                if (isset($cl['css'])) {
+                    if (is_string($cl['css']) && md_theme_var_ok($cl['css'])) {
+                        $css = (string)$cl['css'];          // 形态一：一个值，写进声明的 css 变量
+                    } elseif (is_array($cl['css'])) {
+                        $map = array();                     // 形态二：变量 => 值（各分支写各自的变量）
+                        foreach ($cl['css'] as $mvName => $mv) {
+                            if (is_string($mvName) && preg_match('/^--[a-z0-9-]{1,40}$/i', $mvName) === 1
+                                && is_string($mv) && md_theme_var_ok($mv)) {
+                                $map[$mvName] = $mv;
+                            }
+                        }
+                        if ($map) {
+                            $css = $map;
+                        }
+                    }
+                }
+            }
+            if ($lab === '' || strlen($lab) > 40) {
+                $lab = ($ck === '') ? '—' : $ck;
+            }
+            $choices[$ck] = $lab;
+            if ($css !== '' && $css !== array()) {
+                $cssMap[$ck] = $css;
+            }
+            if (count($choices) >= 12) {
+                break;                                  // 单条选项最多 12 个分支
+            }
+        }
+        if (!$choices) {
+            return false;
+        }
+        $keys = array_keys($choices);
+        $c['choices'] = $choices;
+        $c['css_map'] = $cssMap;
+        $c['default'] = (isset($o['default']) && is_string($o['default']) && isset($choices[$o['default']]))
+            ? (string)$o['default'] : (string)$keys[0];
+        return $c;
+    }
+    if ($type === 'number') {
+        foreach (array('min', 'max') as $k) {
+            $c[$k] = (isset($o[$k]) && is_numeric($o[$k])) ? (string)(0 + $o[$k]) : '';
+        }
+        $c['step'] = (isset($o['step']) && is_numeric($o['step']) && $o['step'] > 0)
+            ? (string)(0 + $o['step']) : '1';
+        $c['unit'] = (isset($o['unit']) && is_string($o['unit'])
+            && preg_match('/^[a-z%]{1,6}$/i', $o['unit']) === 1) ? (string)$o['unit'] : '';
+        // 最小值大于最大值时交换，避免声明笔误把选项卡死
+        if ($c['min'] !== '' && $c['max'] !== '' && (float)$c['min'] > (float)$c['max']) {
+            $swap = $c['min'];
+            $c['min'] = $c['max'];
+            $c['max'] = $swap;
+        }
+        $c['default'] = md_theme_option_value($c, isset($o['default']) ? $o['default'] : '');
+        if ($c['default'] === false) {
+            $c['default'] = '';
+        }
+        return $c;
+    }
+    // text / textarea / color：默认值同样过校验，非法回落空串（= 未设置）
+    $dv = md_theme_option_value($c, isset($o['default']) ? $o['default'] : '');
+    $c['default'] = ($dv === false) ? '' : $dv;
+    return $c;
+}
+
+/** 配置里的 theme_options 归一化：只保形态合法的层（主题名/键名/标量值，条数封顶）。 */
+function md_theme_options_normalize($raw)
+{
+    if (!is_array($raw)) {
+        return array();
+    }
+    $out = array();
+    foreach ($raw as $theme => $vals) {
+        if (!is_string($theme) || preg_match('/^[a-z0-9_-]{1,32}$/', $theme) !== 1 || !is_array($vals)) {
+            continue;
+        }
+        $clean = array();
+        foreach ($vals as $k => $v) {
+            if (!is_string($k) || preg_match('/^[a-z0-9][a-z0-9_-]{0,31}$/', $k) !== 1) {
+                continue;
+            }
+            if (is_bool($v) || is_int($v) || is_float($v)) {
+                $clean[$k] = $v;
+            } elseif (is_string($v) && strlen($v) <= 2000) {
+                $clean[$k] = $v;
+            } else {
+                continue;                               // 数组/对象一律剔除（配置里不该有嵌套值）
+            }
+            if (count($clean) >= MD_THEME_OPTIONS_MAX) {
+                break;
+            }
+        }
+        if ($clean) {
+            $out[$theme] = $clean;
+        }
+    }
+    return $out;
+}
+
+/**
+ * 某主题的全部选项取值：声明默认 + 配置存储（存储值过声明校验，非法回落默认）。
+ * 键集合恒等于主题声明的键集合——模板可以放心按声明键取值。
+ * 请求内缓存放在 $GLOBALS（而非 static）：配置写入后由 md_theme_options_clear_cache 清掉。
+ */
+function md_theme_options($theme)
+{
+    $theme = preg_match('/^[a-z0-9_-]{1,32}$/', (string)$theme) === 1 ? (string)$theme : 'default';
+    if (!isset($GLOBALS['md_theme_opt_cache'])) {
+        $GLOBALS['md_theme_opt_cache'] = array();
+    }
+    if (isset($GLOBALS['md_theme_opt_cache'][$theme])) {
+        return $GLOBALS['md_theme_opt_cache'][$theme];
+    }
+    $m = md_theme_manifest($theme);
+    $cfg = md_config_load();
+    $stored = (isset($cfg['theme_options'][$theme]) && is_array($cfg['theme_options'][$theme]))
+        ? $cfg['theme_options'][$theme] : array();
+    $out = array();
+    foreach ($m['options'] as $key => $decl) {
+        $v = null;
+        if (array_key_exists($key, $stored)) {
+            $chk = md_theme_option_value($decl, $stored[$key]);
+            // 校验失败用 false 当哨兵，但 toggle 的合法值本身就是布尔——它的 false
+            // 表示「站长关掉了」，不是「值非法」（不区分的话，声明 default=true 的开关
+            // 一旦被关就会静默回弹成开）。布尔类型不走哨兵判断。
+            if ($decl['type'] === 'toggle' || $chk !== false) {
+                $v = $chk;
+            }
+        }
+        $out[$key] = ($v === null) ? $decl['default'] : $v;
+    }
+    $GLOBALS['md_theme_opt_cache'][$theme] = $out;
+    return $out;
+}
+
+/** 清掉本次请求内选项取值的缓存（配置写入后调用，保证同请求内立即看到新值）。 */
+function md_theme_options_clear_cache()
+{
+    $GLOBALS['md_theme_opt_cache'] = array();
+}
+
+/** 单个选项取值（主题模板用）：$key 未声明时返回 $fallback。 */
+function md_theme_option($theme, $key, $fallback = '')
+{
+    $all = md_theme_options($theme);
+    return array_key_exists($key, $all) ? $all[$key] : $fallback;
+}
+
+/**
+ * 主题选项产生的 CSS 变量（$mode = light|dark）：变量名 => 值，已过 var 白名单。
+ * 未设置（空串）的选项不产生变量；toggle 关且未声明 off 时同样不产生。
+ * 变量集：深色块默认沿用 css（色变了深浅两边都该变），声明过 css_dark 时只写它。
+ * select 分支的 css 支持两种形态：单个值（写进声明的 css 变量）或 变量=>值 映射。
+ */
+function md_theme_option_vars($theme, $mode = 'light')
+{
+    $m = md_theme_manifest($theme);
+    if (empty($m['options'])) {
+        return array();
+    }
+    $vals = md_theme_options($theme);
+    $dark = ($mode === 'dark');
+    $out = array();
+    foreach ($m['options'] as $key => $decl) {
+        $v = isset($vals[$key]) ? $vals[$key] : null;
+        if ($v === null || $v === '') {
+            continue;
+        }
+        $list = $decl['css'];
+        if ($dark && !empty($decl['css_dark_set'])) {
+            $list = $decl['css_dark'];                  // 显式声明过：深色块只写它（空数组 = 深色不变）
+        }
+        $raw = '';
+        $map = array();                                 // select 分支的变量=>值映射（优先于 css 列表）
+        if ($decl['type'] === 'toggle') {
+            $raw = $v ? (isset($decl['on']) ? $decl['on'] : '') : (isset($decl['off']) ? $decl['off'] : '');
+        } elseif ($decl['type'] === 'number') {
+            $raw = $v . (isset($decl['unit']) ? $decl['unit'] : '');
+        } elseif ($decl['type'] === 'select') {
+            $branch = isset($decl['css_map'][$v]) ? $decl['css_map'][$v] : '';
+            if (is_array($branch)) {
+                $map = $branch;
+            } else {
+                $raw = (string)$branch;
+            }
+        } else {
+            $raw = (string)$v;
+        }
+        foreach ($map as $name => $mv) {
+            $out[$name] = $mv;
+        }
+        if ($raw === '' || !md_theme_var_ok($raw)) {
+            if (!$map) {
+                continue;
+            }
+        } elseif ($list) {
+            foreach ($list as $name) {
+                $out[$name] = $raw;
+            }
+        }
+        // 颜色的派生变量：css_rgb 写三元组，css_tpl 比值模板（{value}/{hex}/{rgb} 三占位）
+        if ($decl['type'] === 'color') {
+            $rgb = md_theme_hex_rgb($raw);
+            if ($rgb !== '') {
+                foreach ($decl['css_rgb'] as $name) {
+                    $out[$name] = $rgb;
+                }
+                foreach ($decl['css_tpl'] as $name => $tpl) {
+                    $rule = strtr($tpl, array('{value}' => $raw, '{hex}' => $raw, '{rgb}' => $rgb));
+                    if (md_theme_var_ok($rule)) {
+                        $out[$name] = $rule;
+                    }
+                }
+            }
+        }
+    }
+    return $out;
+}
+
+/** 选项声明整表校验：键 => 归一化声明；非法条目丢弃，重复键取先声明的一条。 */
+function md_theme_options_check($raw)
+{
+    $out = array();
+    if (!is_array($raw)) {
+        return $out;
+    }
+    foreach ($raw as $o) {
+        $c = md_theme_option_check($o);
+        if ($c !== false && !isset($out[$c['key']])) {
+            $out[$c['key']] = $c;
+            if (count($out) >= MD_THEME_OPTIONS_MAX) {
+                break;                                  // 声明条数上限：后台表单与配置体积都要收口
+            }
+        }
+    }
+    return $out;
 }
 
 /** 校验并归一化主题包数据；任何不合法整体拒绝（返回 false）。 */
@@ -122,7 +622,8 @@ function md_theme_manifest_check($m)
     if ($name === '' || strlen($name) > 40) {
         $name = false;
     }
-    $clean = array('name' => $name, 'dark' => !empty($m['dark']), 'vars' => array(), 'vars-dark' => array());
+    $clean = array('name' => $name, 'dark' => !empty($m['dark']), 'vars' => array(), 'vars-dark' => array(),
+                   'options' => array());
     foreach (array('vars', 'vars-dark') as $g) {
         $src = isset($m[$g]) && is_array($m[$g]) ? $m[$g] : array();
         foreach ($src as $k => $v) {
@@ -138,10 +639,37 @@ function md_theme_manifest_check($m)
             $clean[$g] = $clean['vars'];
         }
     }
+    // 选项声明（v1.19.0）：非法条目单独丢弃，不影响整包（与变量同取舍）
+    $clean['options'] = md_theme_options_check(isset($m['options']) ? $m['options'] : array());
     return $clean;
 }
 
-/** 读主题包：themes/<名称>/theme.php 优先（校验通过才用），否则内置兜底。 */
+/**
+ * 内置包的程序侧目录（权威副本）：_dir/lib/builtin-themes/<名称>/theme.php(+view.php)。
+ * 随 _dir/lib/ 一起升级，因此升级只覆盖 lib 即可拿到新版内置主题——
+ * _dir/themes/ 只用来放用户自建主题（同名目录会被忽略，避免读到旧副本）。
+ */
+function md_theme_builtin_dir($theme)
+{
+    $theme = (string)$theme;
+    if (preg_match('/^[a-z0-9_-]{1,32}$/', $theme) !== 1) {
+        return false;
+    }
+    return MD_LIB . '/builtin-themes/' . $theme;
+}
+
+/** 内置包源文件路径（不存在返回 false）：$file = 'theme.php' | 'view.php'。 */
+function md_theme_builtin_file($theme, $file)
+{
+    $dir = md_theme_builtin_dir($theme);
+    if ($dir === false || !in_array($file, array('theme.php', 'view.php'), true)) {
+        return false;
+    }
+    $path = $dir . '/' . $file;
+    return is_file($path) && !is_link($path) ? $path : false;
+}
+
+/** 读主题包：内置包（程序侧权威副本）优先，用户自建包取 _dir/themes/，都不可用时用硬编码色板。 */
 function md_theme_manifest($theme)
 {
     static $cache = array();
@@ -150,17 +678,27 @@ function md_theme_manifest($theme)
         return $cache[$theme];
     }
     $builtins = md_theme_builtin_manifests();
-    $m = false;
-    $file = MD_DIR . '/themes/' . $theme . '/theme.php';
-    if (is_file($file)) {
-        $loaded = @include $file;                        // 主题包数据文件（return array）
-        $m = md_theme_manifest_check($loaded);
+    if (isset($builtins[$theme])) {
+        // 内置包：从 _dir/lib/builtin-themes/ 读（权威副本，随 lib 升级覆盖）。
+        // _dir/themes/<内置名>/ 是给站长看的可读镜像，读包一律以程序侧为准——
+        // 镜像滞后（只读安装写不进）或残留旧版时，色板与选项声明不会跟着变旧。
+        $src = md_theme_builtin_file($theme, 'theme.php');
+        $m = $src !== false ? md_theme_manifest_check(@include $src) : false;
+        if ($m === false) {
+            $m = $builtins[$theme];                      // lib 负载缺失/被改坏时用硬编码色板兜底
+        }
+    } else {
+        $m = false;
+        $file = MD_DIR . '/themes/' . $theme . '/theme.php';
+        if (is_file($file)) {
+            $m = md_theme_manifest_check(@include $file);   // 用户自建包数据文件（return array）
+        }
+        if ($m === false) {
+            $m = $builtins['default'];                   // 自建包读坏/被删：回落默认色板（前台仍可读）
+        }
     }
-    if ($m !== false) {
-        $cache[$theme] = $m;                             // 只缓存成功加载：包文件修好当请求即可重读
-        return $m;
-    }
-    return isset($builtins[$theme]) ? $builtins[$theme] : $builtins['default'];
+    $cache[$theme] = $m;                                 // 只缓存成功加载：包文件修好当请求即可重读
+    return $m;
 }
 
 /** 主题是否存在（内置包 or 目录里有 theme.php / view.php）。 */
@@ -179,7 +717,6 @@ function md_theme_exists($theme)
 /** 可选主题清单：array(目录名 => 显示名)，供后台下拉与前台校验。 */
 function md_theme_list()
 {
-    md_theme_seed();
     $out = array();
     foreach (md_theme_builtin_manifests() as $k => $m) {
         $out[$k] = isset($m['name']) && is_string($m['name']) && $m['name'] !== '' ? $m['name'] : $k;
@@ -208,7 +745,23 @@ function md_theme_list()
     return $out;
 }
 
-/** 内置主题播种：可写且缺失时把 default / wiki 写成真实主题包（升级覆盖，自建不动）。 */
+/**
+ * 内置主题同步：把程序侧权威副本（_dir/lib/builtin-themes/）镜像到 _dir/themes/。
+ *
+ * 语义（2026-10-16 用户拍板「改成覆盖」）：
+ *   - **镜像跟着 lib 走**：逐文件比对内容，只要负载与镜像不同就写过去——
+ *     升级只覆盖 `_dir/lib/` 也能拿到新版内置版式与配色，不需要再手工覆盖 themes/；
+ *   - **镜像不是编辑点**：直接改 `_dir/themes/default/`（或 wiki/）下的文件，下一次
+ *     请求就会被负载覆盖回来（提示语同理写在镜像文件头）。要改内置主题请整套复制到
+ *     另一个目录名——那是自建主题，永不被动；
+ *   - **负载里没有的文件要清掉**：wiki 是纯色板包（没有 view.php），镜像里若残留旧副本
+ *     会被当成「自带模板」用，必须删除；
+ *   - **只动 default / wiki 两个目录名**：其余目录是用户自建主题，一律不碰。
+ *
+ * 实现上刻意不记版本号：比对内容比记版本更准（同版本内改了 lib 也能生效，不会因为
+ * 版本号没变而漏掉），也少了一个运行期文件。内容一致时一次写盘都不发生，所以
+ * 每次请求调用它只是几次文件读取。
+ */
 function md_theme_seed()
 {
     static $done = false;
@@ -221,13 +774,24 @@ function md_theme_seed()
         @mkdir($dir, 0755, true);
     }
     foreach (md_theme_builtin_manifests() as $k => $m) {
-        $file = $dir . '/' . $k . '/theme.php';
-        if (!is_file($file)) {
+        if (!is_dir($dir . '/' . $k)) {
             @mkdir($dir . '/' . $k, 0755, true);
-            $body = "<?php\n// DirDocs 内置主题包（随程序升级覆盖本目录；自建主题请使用其他目录名）\n"
-                . "// 结构：name 显示名 / dark 默认深色优先 / vars 浅色变量 / vars-dark 深色变量\n"
-                . "return " . var_export($m, true) . ";\n";
-            md_write_file($file, $body);
+        }
+        foreach (array('theme.php', 'view.php') as $f) {
+            $srcPath = md_theme_builtin_file($k, $f);
+            $dstPath = $dir . '/' . $k . '/' . $f;
+            if ($srcPath === false) {
+                @unlink($dstPath);                       // 负载里没有：镜像旧副本必须清掉
+                continue;
+            }
+            $src = md_read_text($srcPath);
+            if ($src === false) {
+                continue;                                // 源文件读不出来：不动镜像（宁可用旧的）
+            }
+            if (is_file($dstPath) && md_read_text($dstPath) === $src) {
+                continue;                                // 内容一致：一次写盘都不发生
+            }
+            md_write_file($dstPath, $src);
         }
     }
 }
@@ -254,17 +818,29 @@ function md_theme_resolve($cfg)
 
 // ---------------------------------------------------------------- CSS 变量
 
-function md_theme_css($theme)
+/**
+ * 主题 CSS 变量块：布局常量 + 主题包色板 + 站长填的主题选项（后写覆盖前写）。
+ * 深浅两块各写一次——选项声明给出了 css_dark 的，深色块用它，否则沿用同一变量名。
+ * $theme 为 '' 时不读主题选项（后台管理页画板等「只看色板」的场景用）。
+ * 注意：这里不做镜像同步（那是后台动作的事，见 md_admin_dispatch）——前台渲染只读不写。
+ */
+function md_theme_css($theme, $withOptions = true)
 {
-    md_theme_seed();
     $m = md_theme_manifest($theme);
     $layout = '--nav-h:56px;--sidebar-width:275px;--toc-width:220px;--toc-max:320px;--content-w:860px;';
     $emit = function ($vars) { $s = ''; foreach ($vars as $k => $v) { $s .= $k . ':' . $v . ';'; } return $s; };
     // 设计系统契约 token（与后台共用同一套变量名，builtin.css 内有逐字一致的兜底定义，
     // 本内联块位于 builtin.css 之后：同值覆写保证主题包生效）。
     // 深浅色统一由 <html data-bs-theme="light|dark|auto"> 驱动（Bootstrap 原生属性 + theme-init.js）。
-    $css = ':root{' . $layout . $emit($m['vars']) . 'color-scheme:light}';
-    $css .= '[data-bs-theme="dark"]{' . $layout . $emit($m['vars-dark']) . 'color-scheme:dark}';
+    $light = $m['vars'];
+    $dark = $m['vars-dark'];
+    if ($withOptions && $theme !== '' && !empty($m['options'])) {
+        // 选项值只覆盖自己声明的变量：值为空串的选项不产生变量，主题色板原样生效
+        $light = array_merge($light, md_theme_option_vars($theme, 'light'));
+        $dark = array_merge($dark, md_theme_option_vars($theme, 'dark'));
+    }
+    $css = ':root{' . $layout . $emit($light) . 'color-scheme:light}';
+    $css .= '[data-bs-theme="dark"]{' . $layout . $emit($dark) . 'color-scheme:dark}';
     return $css;
 }
 
@@ -302,16 +878,20 @@ function md_theme_csp($cfg = null)
 // ---------------------------------------------------------------- 页面调度器（主题包规范）
 
 /**
- * 主题包规范（WordPress/Typecho 模式，2026-10-14 定版）：
+ * 主题包规范（WordPress/Typecho 模式，2026-10-14 定版；v1.19.0 追加 options）：
  *   _dir/themes/<名称>/
  *     theme.php   主题清单（return array）：name 显示名 / dark 深浅倾向 /
- *                 vars + vars-dark 两套完整变量（数据文件，经 manifest 校验）
+ *                 vars + vars-dark 两套完整变量（数据文件，经 manifest 校验）/
+ *                 options 主题选项声明（可选，站长在后台「主题」页填写，取值存进
+ *                 config.theme_options[主题名]；见上方「主题选项模型」）。
+ *                 选项值写 CSS 变量时由 md_theme_css 合并进内联变量块，无需模板参与。
  *     view.php    整页模板：主题即代码（安装主题 = 安装代码，只装可信来源）。
  *                 md_page 注入上下文变量后 include，模板负责输出完整 HTML。
  *                 可用变量：$cfg $ctx $theme $mode $lang $home $searchUrl $recentUrl $q
- *                 $tocHtml $cdn $mermaidUrl $hasAdmin $headAssets $themeUrl $adminUrl，
+ *                 $tocHtml $cdn $mermaidUrl $hasAdmin $headAssets $themeUrl $adminUrl
+ *                 $themeOptions（v1.19.0：当前主题选项取值，键集合见主题包 options 声明），
  *                 常量 MD_VERSION，助手 md_e / md_t / md_lang_current / md_i18n_js_attr /
- *                 md_url_for / md_admin_url / md_cdn_active。
+ *                 md_url_for / md_admin_url / md_cdn_active / md_project_url（项目主页）/
  *                 i18n 契约：<html lang> 输出 $lang；<html> 标签带 md_i18n_js_attr()
  *                 输出的 data-md-i18n 属性（builtin.js 的 JS 文案词典，缺失时 JS 回落
  *                 自带中文）；界面文案一律经 md_t() 取词，不要在模板里写死文案。
@@ -323,10 +903,19 @@ function md_theme_csp($cfg = null)
  * 模板解析：主题自带 view.php 优先；纯色板包（只有 theme.php）回退 default 的模板，
  * 色板经 $headAssets 生效。default 也缺失时走应急简页保内容可读。
  */
+/**
+ * 主题的整页模板路径（false = 该主题没有自带模板，由调度器回退 default）。
+ * 内置包取程序侧权威副本（_dir/lib/builtin-themes/）：前台渲染不写盘，且升级只覆盖
+ * _dir/lib/ 就立刻生效，不受 _dir/themes/ 镜像是否新鲜、是否可写的影响。
+ * 用户自建包取 _dir/themes/<名>/view.php。
+ */
 function md_theme_view_file($theme)
 {
     if (!preg_match('/^[a-z0-9_-]{1,32}$/', (string)$theme)) {
         return false;
+    }
+    if (array_key_exists((string)$theme, md_theme_builtin_manifests())) {
+        return md_theme_builtin_file($theme, 'view.php');  // 纯色板内置包（wiki）无 view.php → false
     }
     $file = MD_DIR . '/themes/' . $theme . '/view.php';
     return !is_file($file) || is_link($file) ? false : $file;
@@ -392,6 +981,9 @@ function md_page($ctx)
     }
     $hasAdmin = $cfg['admin_pass'] !== '';
     $headAssets = md_theme_head_assets($cfg, $theme);    // 防闪烁脚本 + CDN + builtin.css + 主题变量
+    // 主题选项取值（v1.19.0）：键集合 = 当前主题声明的选项，值已过声明校验。
+    // 模板可直接读 $themeOptions['键']，或用 md_theme_option($theme, '键')。
+    $themeOptions = md_theme_options($theme);
     $themeUrl = '?a=asset&t=' . rawurlencode($theme);    // 主题资产基址（拼 f=<assets/ 下文件>）
     $adminUrl = '?a=admin';
 

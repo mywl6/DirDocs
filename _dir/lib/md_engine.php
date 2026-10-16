@@ -349,6 +349,13 @@ function md_display_name($name, $cfg)
 
 function md_scan($dir, $cfg, $prefix = '', &$out = array())
 {
+    // 三个键恒存在：某类一个都没有时（例如新站还没有任何附件）也不能缺键——
+    // 消费方（后台概览/附件页）直接对 $tree['attach'] 取 count，缺键在 PHP 8 上是致命错误
+    foreach (array('dir', 'md', 'attach') as $mdScanType) {
+        if (!isset($out[$mdScanType]) || !is_array($out[$mdScanType])) {
+            $out[$mdScanType] = array();
+        }
+    }
     $items = @scandir($dir);
     if ($items === false) {
         return $out;
@@ -1321,6 +1328,10 @@ function md_config_defaults()
         'admin_user'    => 'admin',
         'theme'         => 'default',
         'mode'          => 'auto',
+        // 主题选项取值（v1.19.0）：array(主题名 => array(选项键 => 值))，由后台「主题」页写入。
+        // 键位形态与取值合法性都由主题包的 options 声明决定，配置里只做类型归一化
+        // （见 md_theme_options_normalize）：主题被删或改声明后，残留值不生效也不会报错
+        'theme_options' => array(),
         'url_mode'      => 'simple',
         'base_path'     => '',
         'home'          => '',
@@ -1390,6 +1401,9 @@ function md_config_load()
     if (!isset($cfg['risk_ignore']) || !is_array($cfg['risk_ignore'])) {
         $cfg['risk_ignore'] = array();
     }
+    // 主题选项取值（v1.19.0）：只保形态合法的层，判据在 md_theme.php（本文件先于它加载，
+    // 函数调用发生在运行时，故这里直接调不构成加载顺序问题）
+    $cfg['theme_options'] = md_theme_options_normalize(isset($cfg['theme_options']) ? $cfg['theme_options'] : array());
     // 界面语言白名单：非法值回落 auto（按浏览器自动），防止配置写坏后 md_lang_pack 拼错路径
     if (!isset($cfg['language']) || !in_array($cfg['language'], md_lang_supported(), true)) {
         $cfg['language'] = 'auto';

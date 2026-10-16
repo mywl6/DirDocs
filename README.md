@@ -99,10 +99,15 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
 放在 Web 根目录 = 整个根都是文档；放在 `/docs/` 子目录 = 那一层就是文档站。
 
 **升级**：用新版本的 `_dir/lib/` 与 `_dir/assets/` 覆盖旧的两个目录即可
-（程序版本号在 `_dir/lib/version.php`，随 lib 一起更新，`index.php` 不用动）。
-你的数据（`_dir/config.php`、`_dir/cache/`）不会被覆盖。主题：自建/改过的主题不用动；
-一直用内置版式（未改过 `_dir/themes/default/`）的站点需一并覆盖 `_dir/themes/default/`，
-才能拿到新版式与页脚。
+（程序版本号在 `_dir/lib/version.php`，随 lib 一起更新，`index.php` 通常不用动——
+它只在路由调整时随版更新）。你的数据（`_dir/config.php`、`_dir/cache/`）不会被覆盖。
+
+`_dir/themes/` 里只有**你自己建的主题**，升级时一个都不用动。内置的 default / wiki
+不需要你操心：它们的权威副本随 `_dir/lib/` 一起升级（放在 `_dir/lib/builtin-themes/`），
+程序会在打开后台时把副本同步到 `_dir/themes/default/`、`_dir/themes/wiki/`——
+想在新版里改内置主题的样式，请整套复制到 `_dir/themes/<你自己的名字>/` 再改，
+那两个名字底下的文件（不管在哪一边）都会被覆盖回去。
+`ocean` 是随包示例主题，属于普通自建主题，可改可删。
 各版本变更见 [CHANGELOG.md](CHANGELOG.md)。
 
 **瘦身**：不需要 mermaid 图表就删掉 `_dir/assets/vendor/mermaid.min.js`（约 3.2MB）——
@@ -113,14 +118,15 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
 
 浏览器打开 **`http://你的域名/index.php?a=admin`**（或点任一页面右下角的"后台"链接）。
 
-首次进入先设定管理员密码（至少 8 位），之后用密码登录。后台做五件事：
+首次进入先设定管理员密码（至少 8 位），之后用密码登录。后台做六件事：
 
-1. **站点设置**——标题、副标题、主题、界面语言、路由模式、白名单后缀、改密码
-2. **文档管理**——在线编辑/新建 Markdown（大编辑请用本地编辑器，网页编辑用于救急）；
+1. **站点设置**——标题、副标题、界面语言、路由模式、白名单后缀、改密码
+2. **主题**——风格包与显示模式，以及当前主题声明的**主题选项**（见下）
+3. **文档管理**——在线编辑/新建 Markdown（大编辑请用本地编辑器，网页编辑用于救急）；
    覆盖保存自动留修订版本（每篇最近 20 版），后台可预览、对比、一键恢复
-3. **附件上传**——上传到指定目录，白名单后缀（图片/pdf/zip/mp4…）
-4. **缓存管理**——重建/清除索引，查看最近更新
-5. **评论管理**——访客评论先审后显：待审清单、批准、删除
+4. **附件上传**——上传到指定目录，白名单后缀（图片/pdf/zip/mp4…）
+5. **缓存管理**——重建/清除索引，查看最近更新
+6. **评论管理**——访客评论先审后显：待审清单、批准、删除
 
 设置页还有一张**新版本检查**卡（默认关闭）：开启后后台每天至多查一次 GitHub Releases，
 有新版时概览的「程序版本」行旁出现一枚可点徽标。检查结果缓存在 `_dir/cache/update.json`，
@@ -128,16 +134,52 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
 
 登录失败 5 次锁定 10 分钟。
 
+### 主题与主题选项
+
+主题是**风格包**，放在 `_dir/themes/<名称>/`：一个 `theme.php` 给出名称与深浅两套色板即可
+（纯配色包，共用默认版式）；再加一个 `view.php` 就是完全不同的整页版式。
+显示模式（自动 / 浅色 / 深色）与主题独立，访问者右上角按钮还能临时切换。
+后台「主题」页可切换主题与模式，并列出每个包的版式形态与声明了几项选项。
+
+内置的 `default` / `wiki` 由程序自己维护（权威副本在 `_dir/lib/builtin-themes/`，
+打开后台时同步到 `_dir/themes/`）。**要定制就整套复制成 `_dir/themes/<你自己的名字>/`
+再改**——改 default / wiki 这两个名字底下的文件会被下一次同步覆盖回去。
+
+**主题选项**让「主题作者声明 → 站长在后台填写 → 前台读取」这条链路成立。主题在 `theme.php`
+里声明 `options`，后台主题页就自动出现对应控件，支持六种类型：
+
+| 类型 | 控件 | 内置示例 |
+|---|---|---|
+| `select` | 下拉 | 圆角风格（跟随主题 / 直角 / 小圆角 / 大圆角） |
+| `color` | 取色器 + 文本框 | 主题主色 |
+| `toggle` | 开关 | 扁平化（去掉卡片阴影） |
+| `number` | 数字框（可带单位） | 正文栏宽（px） |
+| `text` | 单行文本框 | 页脚补充信息（备案号等） |
+| `textarea` | 多行文本框 | 站点公告 |
+
+取值有两种用法，可同时用：
+
+- **自动写 CSS 变量**——声明 `css`（变量名列表）、`css_rgb`（该色的 RGB 三元组，喂 Bootstrap 的
+  `--bs-*-rgb`）、`css_tpl`（如 `--accent-weak => rgba({rgb},.12)`），选项值会并入页面内联变量块；
+  深浅两套可各自指定（`css_dark`）。不写一行模板代码就能换色、换圆角、换栏宽、去阴影。
+- **模板读取**——`view.php` 里用 `$themeOptions['键']` 或 `md_theme_option($theme, '键')` 取用；
+  默认主题就是这么渲染「站点公告」与页脚补充信息的。
+
+选项值**按主题分别保存**在 `_dir/config.php`（换主题不丢，换回来即恢复）；留空 = 跟随主题自带
+配色、不写任何覆盖，写坏的值（非色值、超范围数值等）会被拒绝且整份不保存。单击「恢复主题
+默认」可清掉当前主题的全部取值。内置的 `default` / `wiki` 各带六个示例选项（六种类型齐备），
+写自己的主题时直接照抄改即可。
+
 ## 目录里各文件的角色
 
 | 路径 | 角色 | 升级时 |
 |---|---|---|
-| `index.php` | 入口：boot + 加载 + 路由分发（版本号读取也在这） | 极少变 |
-| `_dir/lib/` | 业务代码（engine/i18n/pages/theme/admin 五模块）、版本号 `version.php`、`lang/` 语言包 | 覆盖 |
+| `index.php` | 入口：boot + 加载 + 路由分发（版本号读取也在这） | 极少变，随包覆盖即可 |
+| `_dir/lib/` | 业务代码（engine/i18n/pages/theme/admin 五模块）、版本号 `version.php`、`lang/` 语言包、内置主题权威副本 `builtin-themes/` | 覆盖 |
 | `_dir/assets/` | 内置 CSS/脚本 + 自托管三方库（`vendor/`：Bootstrap/图标/mermaid/qrcode） | 覆盖 |
 | `_dir/config.php` | 你的站点配置 | 不动 |
 | `_dir/cache/` | 索引缓存（可随时删） | 不动 |
-| `_dir/themes/` | 你的自定义主题（内置版式更新见「升级」节说明） | 改过的不动 |
+| `_dir/themes/` | 主题：你自建的主题 + `ocean`（示例） + 内置 default/wiki 的运行期镜像 | 自建的不动；镜像由程序自动同步 |
 | 其余目录 | 你的文档与附件 | 不动 |
 
 ## 安全设计
@@ -298,10 +340,16 @@ At the web root, the whole root is the docs; under `/docs/`, that level is the s
 
 **Upgrading**: overwrite the old `_dir/lib/` and `_dir/assets/` with the new versions
 (the version number lives in `_dir/lib/version.php` and travels with `lib/`; `index.php`
-stays untouched). Your data (`_dir/config.php`, `_dir/cache/`) is never overwritten.
-Themes you created or customized stay untouched; if you have always used the built-in
-look (never modified `_dir/themes/default/`), also overwrite that directory to pick up
-the new layout and footer.
+only changes when routing changes). Your data (`_dir/config.php`, `_dir/cache/`) is never
+overwritten.
+
+`_dir/themes/` holds **only themes you created yourself** — upgrading never touches them.
+The built-in `default` / `wiki` need no attention from you: their authoritative copies ship
+with `_dir/lib/` (under `_dir/lib/builtin-themes/`) and the program syncs them into
+`_dir/themes/default/` and `_dir/themes/wiki/` when you open the admin. To customize a
+built-in theme, copy the whole directory to `_dir/themes/<your-own-name>/` and edit there —
+anything under those two names gets synced back. `ocean` is a sample theme: it behaves like
+any user-created theme, so edit or delete it freely.
 Per-version changes: [CHANGELOG.md](CHANGELOG.md) (Chinese).
 
 **Slimming**: don't need mermaid diagrams? Delete `_dir/assets/vendor/mermaid.min.js`
@@ -314,18 +362,20 @@ everything else is unaffected; the admin overview flags the missing file. Put it
 Open **`http://yourdomain/index.php?a=admin`** in a browser (or the "Admin" link in the
 bottom corner of any page).
 
-The first visit sets the admin password (at least 8 characters). The admin does five
+The first visit sets the admin password (at least 8 characters). The admin does six
 things:
 
-1. **Site settings** — title, subtitle, theme, UI language, URL mode, allowed
-   extensions, password change
-2. **Documents** — edit/create Markdown online (use a local editor for long-form work;
+1. **Site settings** — title, subtitle, UI language, URL mode, allowed extensions,
+   password change
+2. **Themes** — style packs and color mode, plus the current theme's declared
+   **theme options**
+3. **Documents** — edit/create Markdown online (use a local editor for long-form work;
    the web editor is for quick fixes); every overwrite-save keeps a revision (last 20
    per doc) with preview, diff and one-click restore
-3. **Uploads** — upload attachments to a chosen directory, whitelist extensions
+4. **Uploads** — upload attachments to a chosen directory, whitelist extensions
    (images/pdf/zip/mp4…)
-4. **Cache** — rebuild/clear indexes, view recent updates
-5. **Comments** — visitor comments are held for approval: pending list, approve, delete
+5. **Cache** — rebuild/clear indexes, view recent updates
+6. **Comments** — visitor comments are held for approval: pending list, approve, delete
 
 Settings also carries an **Update check** card (off by default): once enabled the admin
 queries GitHub Releases at most once a day, and a clickable badge appears next to "App
@@ -340,11 +390,11 @@ Five failed logins lock the account for 10 minutes.
 | Path | Role | On upgrade |
 |---|---|---|
 | `index.php` | Entry: boot + load + route | rarely changes |
-| `_dir/lib/` | Business code (engine/i18n/pages/theme/admin) + `version.php` + `lang/` packs | overwrite |
+| `_dir/lib/` | Business code (engine/i18n/pages/theme/admin) + `version.php` + `lang/` packs + built-in theme sources `builtin-themes/` | overwrite |
 | `_dir/assets/` | Built-in CSS/JS + self-hosted vendor libs (Bootstrap/icons/mermaid/qrcode) | overwrite |
 | `_dir/config.php` | Your site config | untouched |
 | `_dir/cache/` | Index cache (safe to delete) | untouched |
-| `_dir/themes/` | Your custom themes (built-in layout updates: see "Upgrading") | yours untouched |
+| `_dir/themes/` | Themes: your own + `ocean` (sample) + runtime mirrors of built-in default/wiki | yours untouched; mirrors sync themselves |
 | everything else | Your docs and attachments | untouched |
 
 <a id="security-design"></a>

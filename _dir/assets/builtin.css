@@ -628,6 +628,9 @@ mark{background:var(--mark-bg);color:var(--accent);padding:1px 4px;border-radius
   transition:color .15s ease;
 }
 .md-footer-meta a:hover{color:var(--text)}
+/* 页脚补充信息（主题选项 footer_note：备案号等）与站点公告（notice） */
+.md-footer-note{color:var(--text3);font-size:.8rem}
+.md-notice{margin:0 0 1rem;white-space:normal}
 
 /* ---------------- 翻页导流（off 小字 / 下一篇 outline 按钮） ---------------- */
 .md-pager{

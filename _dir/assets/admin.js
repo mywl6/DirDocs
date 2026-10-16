@@ -498,6 +498,20 @@
     }, false);
   })();
 
+  // ---- 10. 主题选项的颜色取色器（v1.19.0）：把选到的色写回同组的文本框。
+  // 文本框才是真实值（可留空 = 跟随主题色板），取色器只做输入辅助——
+  // 无 JS 时文本框照常手填，功能不降级。
+  try {
+    qsa(document, "input[type=color][data-md-color]").forEach(function (sw) {
+      var box = document.getElementById(sw.getAttribute("data-md-color"));
+      if (!box) { return; }
+      on(sw, "input", function () {
+        box.value = sw.value;                         // #rrggbb 形态，服务端按声明校验
+      });
+    });
+  } catch (e) { /* 取色器失败不影响手填 */
+  }
+
   // ---- 9. TOTP 二维码（设置页启用确认步）：URI 从 data-totp-qr 读，
   // CDN 库没加载成功时这里什么都不做——服务端恒显示密钥文本，手输照样能绑
   try {

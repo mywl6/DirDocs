@@ -2,7 +2,7 @@
 /**
  * DirDocs 后台（鉴权/登录/功能/分发） 模块（由 index.php 加载，勿单独访问）
  *
- * 页面：概览 / 文档（树形目录管理 + 编辑器）/ 附件 / 缓存 / 设置。
+ * 页面：概览 / 文档（树形目录管理 + 编辑器）/ 附件 / 缓存 / 主题（风格包 + 主题选项）/ 设置。
  * 56px 毛玻璃顶栏（与前台同语言）+ 桌面左侧竖导航（移动端 Bootstrap offcanvas
  * 抽屉）+ 纸张卡片内容区。v1.7.0 起「分类管理 = 目录管理」：目录 CRUD
  * （dirnew/dirrename/dirdel）与文档复制（copy）都在本模块内；服务端渲染兜底，
@@ -831,7 +831,7 @@ function md_config_set($patch)
                    'show_attach', 'order_prefix', 'admin_pass', 'admin_user', 'admin_totp',
                    'base_path', 'site_url', 'risk_ignore',
                    'comments', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass',
-                   'smtp_from', 'smtp_secure', 'notify_email', 'update_check');
+                   'smtp_from', 'smtp_secure', 'notify_email', 'update_check', 'theme_options');
     $cfg = md_config_load();
     foreach ($patch as $k => $v) {
         if (in_array($k, $allow, true)) {
@@ -894,6 +894,8 @@ function md_config_set($patch)
     if (!in_array($cfg['url_mode'], array('simple', 'pretty'), true)) {
         $cfg['url_mode'] = 'simple';
     }
+    // 主题选项取值：形态收口在 md_theme.php（只保合法层，值约束由主题声明在读取时施加）
+    $cfg['theme_options'] = md_theme_options_normalize($cfg['theme_options']);
 
     $body = "<?php\n// DirDocs 站点配置（由后台生成，可手工编辑）\nreturn "
         . var_export($cfg, true) . ";\n";
@@ -911,6 +913,7 @@ function md_config_set($patch)
     }
     @chmod($file, 0644);
     md_config_reset();                                  // 同请求内立即可见新配置
+    md_theme_options_clear_cache();                     // 选项取值同样要跟着刷新
     return true;
 }
 
@@ -975,6 +978,7 @@ function md_admin_ico($name)
         'ok'      => 'check2',
         'refresh' => 'arrow-clockwise',
         'github'  => 'github',
+        'palette' => 'palette',
     );
     if (!isset($icons[$name])) {
         return '';
@@ -1015,6 +1019,7 @@ function md_admin_nav_items()
         'comments' => array('admin_nav_comments', 'chat'),
         'attach'   => array('admin_nav_attach', 'image'),
         'cache'    => array('admin_nav_cache', 'db'),
+        'theme'    => array('admin_nav_theme', 'palette'),
         'config'   => array('admin_nav_settings', 'gear'),
     );
 }
@@ -2767,6 +2772,267 @@ function md_admin_cache($cfg)
     md_admin_page(md_t('admin_cache_title'), $body, 'cache');
 }
 
+// ---------------------------------------------------------------- 主题（风格包 + 主题选项）
+
+/**
+ * 主题页（v1.19.0）：把「风格包 / 显示模式 / 主题选项」从设置页摘出来单独管理。
+ *
+ * 三个动作：
+ *   select  换主题（风格包）与显示模式——沿用原设置页语义，只是搬了家
+ *   options 保存当前主题的选项取值（表单键位 opt[<选项键>]）
+ *   reset   清除当前主题的全部选项取值，回到主题自带色板
+ *
+ * 选项由主题包自己声明（theme.php 的 options，见 md_theme.php「主题选项模型」）：
+ * 后台按声明渲染控件（文本/多行/下拉/开关/颜色/数值），既不认识也不限制具体是哪些项。
+ * 取值按主题分别存储（config.theme_options[主题名]），换主题不丢，换回来就恢复。
+ */
+function md_admin_theme($cfg)
+{
+    md_admin_guard();
+    md_csrf_guard();
+
+    $resolved = md_theme_resolve($cfg);
+    $theme = $resolved['theme'];
+    $modeCur = $resolved['mode'];
+    $manifest = md_theme_manifest($theme);
+    $decls = isset($manifest['options']) ? $manifest['options'] : array();
+    $msg = '';
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $act = isset($_POST['th_do']) ? (string)$_POST['th_do'] : '';
+
+        if ($act === 'select') {
+            $newTheme = isset($_POST['theme']) ? (string)$_POST['theme'] : 'default';
+            $newMode = isset($_POST['mode']) ? (string)$_POST['mode'] : 'auto';
+            if (!in_array($newTheme, md_available_themes(), true)) {
+                $newTheme = 'default';
+            }
+            if (!in_array($newMode, array('auto', 'light', 'dark'), true)) {
+                $newMode = 'auto';
+            }
+            if (md_config_set(array('theme' => $newTheme, 'mode' => $newMode))) {
+                header('Location: ' . md_admin_url('theme', array('saved' => 'theme')));
+                exit;
+            }
+            $msg = '<div class="alert alert-danger">' . md_e(md_t('admin_err_ro_save')) . '</div>';
+
+        } elseif ($act === 'options') {
+            $raw = isset($_POST['opt']) && is_array($_POST['opt']) ? $_POST['opt'] : array();
+            $bad = array();
+            $store = array();
+            foreach ($decls as $key => $decl) {
+                // 开关未勾选时表单不带该键 → 取 false 参与比较（声明默认 true 的开关必须能关掉）
+                $val = ($decl['type'] === 'toggle')
+                    ? md_theme_option_value($decl, !empty($raw[$key]))
+                    : (array_key_exists($key, $raw) ? md_theme_option_value($decl, $raw[$key]) : $decl['default']);
+                if ($val === false && $decl['type'] !== 'toggle') {
+                    $bad[] = $decl['label'];
+                    continue;
+                }
+                // 与声明默认相同的值不落盘：config.php 里只留真正改过的项，
+                // 主题日后改了默认值也能自然跟随（读取时本就会回落到声明默认）
+                if ($val === $decl['default']) {
+                    continue;
+                }
+                $store[$key] = $val;
+            }
+            if ($bad) {
+                $msg = '<div class="alert alert-danger">'
+                    . md_e(md_t('admin_th_opt_bad', array('list' => implode('、', array_slice($bad, 0, 5)))))
+                    . '</div>';
+            } else {
+                $all = isset($cfg['theme_options']) && is_array($cfg['theme_options'])
+                    ? $cfg['theme_options'] : array();
+                if ($store) {
+                    $all[$theme] = $store;
+                } else {
+                    unset($all[$theme]);
+                }
+                if (md_config_set(array('theme_options' => $all))) {
+                    header('Location: ' . md_admin_url('theme', array('saved' => 'opt')));
+                    exit;
+                }
+                $msg = '<div class="alert alert-danger">' . md_e(md_t('admin_err_ro_save')) . '</div>';
+            }
+
+        } elseif ($act === 'reset') {
+            $all = isset($cfg['theme_options']) && is_array($cfg['theme_options'])
+                ? $cfg['theme_options'] : array();
+            unset($all[$theme]);
+            if (md_config_set(array('theme_options' => $all))) {
+                header('Location: ' . md_admin_url('theme', array('saved' => 'reset')));
+                exit;
+            }
+            $msg = '<div class="alert alert-danger">' . md_e(md_t('admin_err_ro_save')) . '</div>';
+        }
+    }
+
+    $body = '<div class="admin-stack">' . $msg;
+    $saved = isset($_GET['saved']) ? (string)$_GET['saved'] : '';
+    $flash = array('theme' => 'admin_th_flash_theme', 'opt' => 'admin_th_flash_opt',
+                   'reset' => 'admin_th_flash_reset');
+    if (isset($flash[$saved])) {
+        $body .= '<div class="alert alert-ok">' . md_e(md_t($flash[$saved])) . '</div>';
+    }
+
+    // ---- 卡一：风格包 + 显示模式（原设置页两个下拉，搬到这里） ----
+    $themeOpts = '';
+    foreach (md_theme_list() as $tDir => $tLabel) {
+        $themeOpts .= '<option value="' . md_e($tDir) . '"' . ($tDir === $cfg['theme'] ? ' selected' : '') . '>'
+            . md_e($tLabel) . '</option>';
+    }
+    $modeOpts = '<option value="auto"' . ($modeCur === 'auto' ? ' selected' : '') . '>' . md_e(md_t('admin_mode_auto')) . '</option>'
+        . '<option value="light"' . ($modeCur === 'light' ? ' selected' : '') . '>' . md_e(md_t('admin_mode_light')) . '</option>'
+        . '<option value="dark"' . ($modeCur === 'dark' ? ' selected' : '') . '>' . md_e(md_t('admin_mode_dark')) . '</option>';
+    $body .= '<section class="card"><div class="admin-card-head"><h2>' . md_e(md_t('admin_th_pick')) . '</h2></div>'
+        . '<div class="admin-card-body"><form method="post" action="' . md_e(md_admin_url('theme')) . '">'
+        . md_csrf_field()
+        . '<input type="hidden" name="th_do" value="select">'
+        . '<div class="admin-grid">'
+        . '<div class="field"><label for="th">' . md_e(md_t('admin_st_theme_label')) . '</label>'
+        . '<select class="select" id="th" name="theme">' . $themeOpts . '</select>'
+        . '<div class="form-hint">' . md_e(md_t('admin_st_theme_hint')) . '</div></div>'
+        . '<div class="field"><label for="mode">' . md_e(md_t('admin_st_mode_label')) . '</label>'
+        . '<select class="select" id="mode" name="mode">' . $modeOpts . '</select>'
+        . '<div class="form-hint">' . md_e(md_t('admin_st_mode_hint')) . '</div></div>'
+        . '</div>'
+        . '<div class="admin-actions-row"><button class="btn btn-primary" type="submit">'
+        . md_e(md_t('admin_save_settings')) . '</button></div>'
+        . '</form></div></section>';
+
+    // ---- 卡二：当前主题的选项（按声明渲染；无声明时说明如何加） ----
+    $vals = md_theme_options($theme);
+    $themeName = isset($manifest['name']) && is_string($manifest['name']) && $manifest['name'] !== ''
+        ? $manifest['name'] : $theme;
+    $body .= '<section class="card"><div class="admin-card-head"><h2>'
+        . md_e(md_t('admin_th_opts_title', array('theme' => $themeName))) . '</h2></div>'
+        . '<div class="admin-card-body">';
+    if (!$decls) {
+        $body .= '<p class="form-hint">' . md_t('admin_th_opts_none') . '</p>';
+    } else {
+        $body .= '<p class="form-hint mb-2">' . md_t('admin_th_opts_hint') . '</p>'
+            . '<form method="post" action="' . md_e(md_admin_url('theme')) . '">'
+            . md_csrf_field()
+            . '<input type="hidden" name="th_do" value="options">'
+            . '<div class="admin-grid">';
+        foreach ($decls as $key => $decl) {
+            $body .= md_admin_theme_opt_field($key, $decl, isset($vals[$key]) ? $vals[$key] : $decl['default']);
+        }
+        $body .= '</div>'
+            . '<div class="admin-actions-row">'
+            . '<button class="btn btn-primary" type="submit">' . md_e(md_t('admin_save_settings')) . '</button>'
+            . '</div></form>';
+        // 恢复默认：单独表单（不能嵌在上面的表单里）
+        $stored = isset($cfg['theme_options'][$theme]) && is_array($cfg['theme_options'][$theme])
+            ? $cfg['theme_options'][$theme] : array();
+        if ($stored) {
+            $body .= '<form method="post" action="' . md_e(md_admin_url('theme')) . '" class="admin-actions-row admin-actions-row-tight">'
+                . md_csrf_field()
+                . '<input type="hidden" name="th_do" value="reset">'
+                . '<button class="btn btn-ghost btn-sm" type="submit" data-confirm="'
+                . md_e(md_t('admin_th_reset_confirm_js')) . '">'
+                . md_e(md_t('admin_th_reset')) . '</button>'
+                . '<span class="form-hint">' . md_e(md_t('admin_th_reset_hint')) . '</span>'
+                . '</form>';
+        }
+    }
+    $body .= '</div></section>';
+
+    // ---- 卡三：主题包清单（看清有哪些包、各自版式与声明了几项） ----
+    $body .= '<section class="card"><div class="admin-card-head"><h2>' . md_e(md_t('admin_th_packs')) . '</h2></div>'
+        . '<div class="admin-wrap"><table class="table admin-kv"><thead><tr>'
+        . '<th>' . md_e(md_t('admin_th_th_name')) . '</th>'
+        . '<th>' . md_e(md_t('admin_th_th_dir')) . '</th>'
+        . '<th>' . md_e(md_t('admin_th_th_view')) . '</th>'
+        . '<th>' . md_e(md_t('admin_th_th_opts')) . '</th>'
+        . '</tr></thead><tbody>';
+    foreach (md_theme_list() as $tDir => $tLabel) {
+        $tm = md_theme_manifest($tDir);
+        $hasView = md_theme_view_file($tDir) !== false;
+        $nOpt = isset($tm['options']) ? count($tm['options']) : 0;
+        $body .= '<tr><td>' . md_e($tLabel)
+            . ($tDir === $theme ? ' <span class="badge admin-now-badge">' . md_e(md_t('admin_th_current')) . '</span>' : '')
+            . '</td>'
+            . '<td><span class="admin-path">_dir/themes/' . md_e($tDir) . '/</span></td>'
+            . '<td>' . md_e($hasView ? md_t('admin_th_view_own') : md_t('admin_th_view_shared')) . '</td>'
+            . '<td>' . md_e($nOpt > 0 ? md_t('admin_th_opt_count', array('n' => $nOpt)) : md_t('admin_th_opt_zero')) . '</td>'
+            . '</tr>';
+    }
+    $body .= '</tbody></table></div>'
+        . '<div class="admin-card-body"><p class="form-hint">' . md_t('admin_th_packs_hint') . '</p></div>'
+        . '</section>';
+
+    md_admin_page(md_t('admin_nav_theme'), $body, 'theme');
+}
+
+/**
+ * 单个主题选项的控件（按声明类型分支）。
+ * 无 JS 时全部照常：颜色是文本框 + 取色器（取色器仅同步文本值），其余都是原生控件。
+ */
+function md_admin_theme_opt_field($key, $decl, $val)
+{
+    $id = 'opt-' . $decl['key'];
+    $name = 'opt[' . $decl['key'] . ']';
+    $ctrl = '';
+    $type = $decl['type'];
+
+    if ($type === 'toggle') {
+        $ctrl = '<label class="md-th-toggle"><input type="checkbox" id="' . md_e($id) . '" name="' . md_e($name) . '" value="1"'
+            . (!empty($val) ? ' checked' : '') . '>' . md_e(md_t('admin_th_toggle_on')) . '</label>';
+    } elseif ($type === 'select') {
+        $ctrl = '<select class="select" id="' . md_e($id) . '" name="' . md_e($name) . '">';
+        foreach ($decl['choices'] as $ck => $cl) {
+            $ctrl .= '<option value="' . md_e((string)$ck) . '"' . ((string)$val === (string)$ck ? ' selected' : '') . '>'
+                . md_e($cl) . '</option>';
+        }
+        $ctrl .= '</select>';
+    } elseif ($type === 'color') {
+        // 颜色：文本框是真实值（可留空 = 跟随主题），取色器只是输入辅助
+        $hex = preg_match('/^#[0-9a-f]{6}$/', (string)$val) === 1 ? strtolower((string)$val) : '';
+        $ctrl = '<span class="md-th-color">'
+            . '<input class="input md-th-color-hex" type="text" id="' . md_e($id) . '" name="' . md_e($name) . '"'
+            . ' value="' . md_e((string)$val) . '" placeholder="' . md_e(md_t('admin_th_opt_inherit')) . '"'
+            . ' spellcheck="false" autocomplete="off">'
+            . '<input class="md-th-color-swatch" type="color" value="' . md_e($hex !== '' ? $hex : '#888888') . '"'
+            . ' data-md-color="' . md_e($id) . '" aria-label="' . md_e(md_t('admin_th_pick_color')) . '"></span>';
+    } elseif ($type === 'number') {
+        $ctrl = '<span class="md-th-num">'
+            . '<input class="input" type="number" id="' . md_e($id) . '" name="' . md_e($name) . '"'
+            . ' value="' . md_e((string)$val) . '"'
+            . ($decl['min'] !== '' ? ' min="' . md_e($decl['min']) . '"' : '')
+            . ($decl['max'] !== '' ? ' max="' . md_e($decl['max']) . '"' : '')
+            . ' step="' . md_e($decl['step']) . '">'
+            . ($decl['unit'] !== '' ? '<span class="md-th-unit">' . md_e($decl['unit']) . '</span>' : '')
+            . '</span>';
+    } elseif ($type === 'textarea') {
+        $ctrl = '<textarea class="textarea" id="' . md_e($id) . '" name="' . md_e($name) . '" rows="3" spellcheck="false">'
+            . md_e((string)$val) . '</textarea>';
+    } else {
+        $ctrl = '<input class="input" type="text" id="' . md_e($id) . '" name="' . md_e($name) . '"'
+            . ' value="' . md_e((string)$val) . '" spellcheck="false" autocomplete="off">';
+    }
+
+    // 映射说明：让站长看清这一项到底改了什么（有 css 映射才显示）
+    $hint = md_e((string)$decl['hint']);
+    $maps = array_merge($decl['css'], $decl['css_dark'], $decl['css_rgb'], array_keys($decl['css_tpl']));
+    if ($maps) {
+        $maps = array_values(array_unique($maps));
+        $more = ($hint !== '' ? ' ' : '');
+        $hint .= $more . md_t('admin_th_opt_maps', array(
+            'vars' => md_e(implode(' ', array_slice($maps, 0, 6))),
+        ));
+    }
+    $wide = ($type === 'textarea') ? ' md-th-field-wide' : '';
+    // 类型徽标放在 <label> 之外：它的文字若并进 label，读屏与自动化工具读到的名字
+    // 会变成「主题主色颜色」这种拼接串（表单可用性受影响）
+    return '<div class="field' . $wide . '">'
+        . '<div class="md-th-label"><label for="' . md_e($id) . '">' . md_e($decl['label']) . '</label>'
+        . '<span class="md-th-type">' . md_e(md_t('admin_th_type_' . $type)) . '</span></div>'
+        . $ctrl
+        . ($hint !== '' ? '<div class="form-hint">' . $hint . '</div>' : '')
+        . '</div>';
+}
+
 // ---------------------------------------------------------------- 站点设置
 
 function md_admin_settings($cfg)
@@ -2781,8 +3047,8 @@ function md_admin_settings($cfg)
             $patch = array(
                 'site_title'    => isset($_POST['site_title']) ? trim((string)$_POST['site_title']) : '',
                 'site_desc'     => isset($_POST['site_desc']) ? trim((string)$_POST['site_desc']) : '',
-                'theme'         => isset($_POST['theme']) ? (string)$_POST['theme'] : 'default',
-                'mode'          => isset($_POST['mode']) ? (string)$_POST['mode'] : 'auto',
+                // theme / mode 已搬到「主题」页（v1.19.0）：本表单不再提交这两项，
+                // 也就不能出现在 patch 里——否则每次保存站点设置都会把它们重置成默认值
                 'language'      => isset($_POST['language']) ? (string)$_POST['language'] : 'auto',
                 'url_mode'      => isset($_POST['url_mode']) ? (string)$_POST['url_mode'] : 'simple',
                 'base_path'     => isset($_POST['base_path']) ? (string)$_POST['base_path'] : '',
@@ -2799,12 +3065,6 @@ function md_admin_settings($cfg)
             );
             if ($patch['site_title'] === '') {
                 $patch['site_title'] = '我的文档';
-            }
-            if (!in_array($patch['theme'], md_available_themes(), true)) {
-                $patch['theme'] = 'default';
-            }
-            if (!in_array($patch['mode'], array('auto', 'light', 'dark'), true)) {
-                $patch['mode'] = 'auto';
             }
             if (!in_array($patch['language'], md_lang_supported(), true)) {
                 $patch['language'] = 'auto';
@@ -2957,19 +3217,7 @@ function md_admin_settings($cfg)
         $body .= '<div class="alert alert-warn">' . md_e(md_t($flashWarn[$saved])) . '</div>';
     }
 
-    // ---- 基本设置 + 白名单（一个表单） ----
-    // 主题下拉用主题包显示名（md_theme_list：目录名 => 显示名）
-    $themeOpts = '';
-    foreach (md_theme_list() as $tDir => $tLabel) {
-        $themeOpts .= '<option value="' . md_e($tDir) . '"' . ($tDir === $cfg['theme'] ? ' selected' : '') . '>'
-            . md_e($tLabel) . '</option>';
-    }
-    // 显示模式与主题解耦：主题=风格包，模式=深浅（auto 跟随系统）
-    $mode = md_theme_resolve($cfg);
-    $modeCur = $mode['mode'];
-    $modeOpts = '<option value="auto"' . ($modeCur === 'auto' ? ' selected' : '') . '>' . md_e(md_t('admin_mode_auto')) . '</option>'
-        . '<option value="light"' . ($modeCur === 'light' ? ' selected' : '') . '>' . md_e(md_t('admin_mode_light')) . '</option>'
-        . '<option value="dark"' . ($modeCur === 'dark' ? ' selected' : '') . '>' . md_e(md_t('admin_mode_dark')) . '</option>';
+    // ---- 基本设置 + 白名单（一个表单）：主题与显示模式已搬到「主题」页（v1.19.0） ----
     // 界面语言：auto 按浏览器 Accept-Language 自动，可强制指定（只翻界面 chrome，不翻译文档内容）
     $langCur = isset($cfg['language']) ? (string)$cfg['language'] : 'auto';
     $langOpts = '<option value="auto"' . ($langCur === 'auto' ? ' selected' : '') . '>' . md_e(md_t('admin_lang_auto')) . '</option>'
@@ -2987,12 +3235,6 @@ function md_admin_settings($cfg)
         . '<input class="input" type="text" id="st" name="site_title" value="' . md_e($cfg['site_title']) . '"></div>'
         . '<div class="field"><label for="sd">' . md_e(md_t('admin_st_desc_label')) . '</label>'
         . '<input class="input" type="text" id="sd" name="site_desc" value="' . md_e($cfg['site_desc']) . '"></div>'
-        . '<div class="field"><label for="th">' . md_e(md_t('admin_st_theme_label')) . '</label>'
-        . '<select class="select" id="th" name="theme">' . $themeOpts . '</select>'
-        . '<div class="form-hint">' . md_e(md_t('admin_st_theme_hint')) . '</div></div>'
-        . '<div class="field"><label for="mode">' . md_e(md_t('admin_st_mode_label')) . '</label>'
-        . '<select class="select" id="mode" name="mode">' . $modeOpts . '</select>'
-        . '<div class="form-hint">' . md_e(md_t('admin_st_mode_hint')) . '</div></div>'
         . '<div class="field"><label for="lang">' . md_e(md_t('admin_lang_label')) . '</label>'
         . '<select class="select" id="lang" name="language">' . $langOpts . '</select>'
         . '<div class="form-hint">' . md_e(md_t('admin_lang_hint')) . '</div></div>'
@@ -3482,6 +3724,11 @@ function md_admin_dispatch($cfg)
     // 以下一切页面都要求已登录
     md_admin_guard();
 
+    // 内置主题镜像同步（v1.19.0）：站长看得到的内置包内容始终等于 _dir/lib/builtin-themes/
+    // 的负载——升级只覆盖 lib 即可，不必再手工覆盖 themes/。放在后台入口而不是前台渲染：
+    // 前台只读不写盘，同步失败（只读/权限）也不影响页面出图（读包走的是程序侧副本）。
+    md_theme_seed();
+
     $tree = md_tree_load($cfg);
     $do = isset($_GET['do']) ? (string)$_GET['do'] : '';
     switch ($do) {
@@ -3527,6 +3774,9 @@ function md_admin_dispatch($cfg)
             break;
         case 'cache':
             md_admin_cache($cfg);
+            break;
+        case 'theme':
+            md_admin_theme($cfg);
             break;
         case 'config':
             md_admin_settings($cfg);
