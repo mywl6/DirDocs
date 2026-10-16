@@ -834,7 +834,7 @@ function md_config_set($patch)
     $allow = array('site_title', 'site_desc', 'theme', 'mode', 'url_mode', 'home', 'language',
                    'ext_md', 'ext_attach', 'hidden_prefix', 'cache',
                    'show_attach', 'order_prefix', 'admin_pass', 'admin_user', 'admin_totp',
-                   'base_path', 'site_url', 'risk_ignore',
+                   'base_path', 'site_url', 'risk_ignore', 'html_mode',
                    'comments', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass',
                    'smtp_from', 'smtp_secure', 'notify_email', 'update_check',
                    'theme_options', 'mcp_tokens');
@@ -899,6 +899,10 @@ function md_config_set($patch)
     $cfg['site_url'] = rtrim($cfg['site_url'], '/');
     if (!in_array($cfg['url_mode'], array('simple', 'pretty'), true)) {
         $cfg['url_mode'] = 'simple';
+    }
+    // 原生 HTML 白名单档位（v1.21.0）：非法值回落标准档，坏值不落到 config.php
+    if (!in_array($cfg['html_mode'], array('off', 'standard', 'loose'), true)) {
+        $cfg['html_mode'] = 'standard';
     }
     // 主题选项取值：形态收口在 md_theme.php（只保合法层，值约束由主题声明在读取时施加）
     $cfg['theme_options'] = md_theme_options_normalize($cfg['theme_options']);
@@ -3094,6 +3098,7 @@ function md_admin_settings($cfg)
                 // 也就不能出现在 patch 里——否则每次保存站点设置都会把它们重置成默认值
                 'language'      => isset($_POST['language']) ? (string)$_POST['language'] : 'auto',
                 'url_mode'      => isset($_POST['url_mode']) ? (string)$_POST['url_mode'] : 'simple',
+                'html_mode'     => isset($_POST['html_mode']) ? (string)$_POST['html_mode'] : 'standard',
                 'base_path'     => isset($_POST['base_path']) ? (string)$_POST['base_path'] : '',
                 'site_url'      => isset($_POST['site_url']) ? (string)$_POST['site_url'] : '',
                 'home'          => isset($_POST['home']) ? trim((string)$_POST['home']) : '',
@@ -3286,6 +3291,13 @@ function md_admin_settings($cfg)
         . '<option value="simple"' . ($cfg['url_mode'] === 'simple' ? ' selected' : '') . '>' . md_e(md_t('admin_url_simple')) . '</option>'
         . '<option value="pretty"' . ($cfg['url_mode'] === 'pretty' ? ' selected' : '') . '>' . md_e(md_t('admin_url_pretty')) . '</option>'
         . '</select></div>'
+        . '<div class="field"><label for="om">' . md_e(md_t('admin_st_htmlmode_label')) . '</label>'
+        . '<select class="select" id="om" name="html_mode">'
+        . '<option value="standard"' . ($cfg['html_mode'] === 'standard' ? ' selected' : '') . '>' . md_e(md_t('admin_html_standard')) . '</option>'
+        . '<option value="loose"' . ($cfg['html_mode'] === 'loose' ? ' selected' : '') . '>' . md_e(md_t('admin_html_loose')) . '</option>'
+        . '<option value="off"' . ($cfg['html_mode'] === 'off' ? ' selected' : '') . '>' . md_e(md_t('admin_html_off')) . '</option>'
+        . '</select>'
+        . '<div class="form-hint">' . md_e(md_t('admin_html_hint')) . '</div></div>'
         . '<div class="field"><label for="bp">' . md_e(md_t('admin_st_basepath_label')) . '</label>'
         . '<input class="input" type="text" id="bp" name="base_path" value="' . md_e($cfg['base_path']) . '" placeholder="/docs"></div>'
         . '<div class="field"><label for="hm">' . md_e(md_t('admin_st_home_label')) . '</label>'

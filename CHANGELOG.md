@@ -4,6 +4,28 @@ DirDocs 对外可见的变更，按版本倒序记录，格式参照
 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。同一版本内按
 **新增 / 变更 / 修复 / 安全** 分组。
 
+## v1.21.0 - 2026-10-16
+
+### 新增
+
+- **原生 HTML 白名单渲染（`html_mode` 三档）**：GitHub README 高频的
+  `<div align="center">`、`<details>/<summary>` 折叠块、`<kbd>`、`<sub>` 等
+  原生 HTML 标签不再显示为字面文本。块级标签遵循 CommonMark HTML block
+  语义（标签行原样放行、到空行为止，中间内容照常走 Markdown），行内标签在
+  段落/列表/表格/标题内同样生效。后台「站点设置」（基础设置卡）新增档位下拉：
+  **标准**（默认，README 常用标签集）/ **宽松**（追加 `style`/`id`/`class`
+  与 `video`/`audio`）/ **关闭**（一律字面显示，回到旧行为；教 HTML 的文档站用）。
+
+### 安全
+
+- **HTML 白名单的底线任何档位不放行**：`script`/`iframe`/`object`/`embed`/
+  `form`/`input`/`link`/`meta` 永不透传（保持转义字面可见），`on*` 事件属性
+  与 `style`（标准档）一律剥除；`<img src>`/`<a href>` 与 Markdown 同走
+  `md_safe_url` 协议闸门（`javascript:` 丢弃），外链 `<a>` 补
+  `target="_blank" rel="noopener"`。纵深处 CSP（`script-src 'self'`、
+  `img-src 'self' data:`、`form-action 'self'`）不变，即使白名单被放宽，
+  内联脚本与站外资源在浏览器层仍不可执行/加载
+
 ## v1.20.0 - 2026-10-16
 
 ### 新增

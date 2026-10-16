@@ -48,6 +48,10 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
 
 - **零改造接入**：AI 常写的 front matter 直接生效——`title` 定标题、`order` 定顺序、
   `draft: true` 藏草稿；`01-`、`02-` 数字前缀排序也认识
+- **AI 夹带的 HTML 也能渲染**：README 常见的 `<div align="center">`、`<details>`
+  折叠块、`<kbd>`、`<sub>` 等原生标签净化后直接生效（后台关闭/标准/宽松三档；
+  `script`、`iframe`、内联事件等危险标签任何档位都不放行）——AI 输出里常见的
+  HTML 片段不再显示成一串字面标签
 - **AI 反复重写有后悔药**：在线编辑每次覆盖保存自动留修订版本（每篇最近 20 版），
   可预览、对比、一键恢复；没定稿的先标 `draft: true`，导航/搜索/订阅/sitemap
   全部隐身，后台仍可预览
@@ -197,6 +201,10 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
 - **链接协议白名单**：Markdown 先全文转义再还原 URL，URL 只放行
   `http` / `https` / `mailto`（判断前先剥掉控制字符与零宽字符），
   危险协议丢链接、留文字。
+- **原生 HTML 白名单**：Markdown 里的原生 HTML 标签过「标签 + 属性」双白名单
+  才重建输出（后台三档可选，`script`/`iframe`/`form` 等底线标签任何档位都不透传，
+  `on*` 事件属性一律剥除）；标签内链接与 Markdown 链接共用同一 URL 协议闸门，
+  未过白名单的标签保持转义字面——可见、可复制，不可执行。
 - **符号链接拒绝**：路径经 `realpath()` 归一后按分隔符整段校验前缀
   （`/foo` 不会命中 `/foobar`），`is_link()` 命中即拒——软链出去的内容不可达；
   文件类型另走扩展名白名单。
@@ -289,6 +297,11 @@ into the folder, it is already in the knowledge base.
 - **Zero-adaptation intake**: the front matter AI already writes just works —
   `title` sets the heading, `order` sets the position, `draft: true` hides the page;
   `01-` / `02-` numeric prefixes sort too
+- **HTML that AI mixes in renders too**: raw tags common in READMEs —
+  `<div align="center">`, `<details>` collapsibles, `<kbd>`, `<sub>` — render
+  sanitized (off / standard / loose modes in the admin; `script`, `iframe` and
+  inline event handlers are never allowed at any level), so HTML fragments in
+  AI output no longer show up as a wall of literal tags
 - **Undo for AI rewrites**: every overwrite-save in the online editor keeps a revision
   (last 20 per doc) with preview, diff and one-click restore; mark unfinished work
   `draft: true` and it vanishes from nav/search/feed/sitemap while staying previewable
@@ -431,6 +444,11 @@ Every mechanism is listed in the open — verify each against the source:
 - **Link protocol whitelist**: Markdown is fully escaped first, then URLs are restored;
   only `http` / `https` / `mailto` pass (control characters and zero-width characters
   are stripped before the check). Dangerous protocols lose the link but keep the text.
+- **Raw HTML whitelist**: raw HTML tags in Markdown must pass a "tag + attribute"
+  double whitelist before they are rebuilt (three levels in the admin; bottom-line tags
+  like `script`/`iframe`/`form` are never passed through, `on*` event attributes are
+  always stripped); links inside tags share the Markdown URL protocol gate, and
+  non-whitelisted tags stay escaped and literal — visible, copyable, never executed.
 - **Symlink rejection**: paths are normalized via `realpath()` and validated per
   path segment (`/foo` does not match `/foobar`); any `is_link()` hit is rejected —
   content symlinked out of the tree is unreachable; file types additionally go through

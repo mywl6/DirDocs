@@ -558,17 +558,205 @@ function md_safe_url($url)
     return $url;
 }
 
-function md_inline($html)
+// ---------------------------------------------------------------- 原生 HTML 白名单（v1.21.0）
+
+/**
+ * 三档 html_mode（off 全转义 / standard 推荐集 / loose 附加视觉与媒体）下的原生 HTML
+ * 白名单通道。universe 在此单一出处，后台档位只做过滤，底线标签（script/iframe/
+ * object/embed/form/input/link/meta）任何档位都不放行，on* 属性永远剥除。
+ */
+
+/** 可开 HTML 块的块级标签（含 void 的 hr）：行首 ≤3 空格缩进、开/闭形态都算块起点。 */
+function md_html_block_tags()
 {
-    // 行内代码先占位，避免内部内容被后续规则处理
+    return array('div', 'p', 'center', 'details', 'summary', 'figure', 'figcaption', 'hr');
+}
+
+/** 各档位的白名单标签集（未知档位按 standard 处理，配置写坏不失效渲染）。 */
+function md_html_tags_for($mode)
+{
+    static $c = null;
+    if ($c === null) {
+        $standard = array_merge(md_html_block_tags(), array(
+            'br', 'img', 'a', 'b', 'strong', 'i', 'em', 'u', 's', 'del',
+            'mark', 'kbd', 'sub', 'sup', 'span', 'code', 'small',
+        ));
+        $loose = array_merge($standard, array('video', 'audio', 'source'));
+        $c = array('off' => array(), 'standard' => $standard, 'loose' => $loose);
+    }
+    return isset($c[$mode]) ? $c[$mode] : $c['standard'];
+}
+
+/** 行首是否落在白名单块级标签上（闭形态也算，无配对要求，浏览器自行容错）。 */
+function md_html_block_start($line, $mode)
+{
+    if ($mode === 'off' || !preg_match('/^ {0,3}<\/?([a-zA-Z][a-zA-Z0-9-]*)/', $line, $m)) {
+        return false;
+    }
+    return in_array(strtolower($m[1]), md_html_block_tags(), true);
+}
+
+/**
+ * 属性裁决。返回 'url'/'text'/'bool'（$val 已被规范化）或 false = 剥除该属性。
+ * URL 类与 Markdown 图片/链接共用 md_safe_url 闸门；style/id/class 仅 loose 档。
+ */
+function md_html_attr($tag, $name, $mode, &$val)
+{
+    if ($name === 'title' || $name === 'align'
+        || ($mode === 'loose' && ($name === 'style' || $name === 'id' || $name === 'class'))) {
+        return 'text';
+    }
+    if ($name === 'href' && $tag === 'a' || $name === 'src' && $tag !== 'a') {
+        $val = md_safe_url($val);
+        return $val !== '' ? 'url' : false;
+    }
+    if ($tag === 'a' && ($name === 'id' || $name === 'name')) {
+        return 'text';          // 页内锚点目标（GitHub README 语言切换段同款），任何档位可用
+    }
+    if ($name === 'alt' && $tag === 'img' || $name === 'type' && $tag === 'source') {
+        return 'text';
+    }
+    if (($name === 'width' || $name === 'height')
+        && ($tag === 'img' || $tag === 'video' || $tag === 'audio')) {
+        return preg_match('/^\d+%?$/', $val) === 1 ? 'text' : false;
+    }
+    if ($name === 'open' && $tag === 'details'
+        || $name === 'controls' && ($tag === 'video' || $tag === 'audio')) {
+        // 布尔属性：HTML 语义里带值即为真，"false" 字面是常见误写——非真值一律剥除（视为关闭）
+        return in_array(strtolower($val), array('', 'true', 'open', '1', 'on'), true) ? 'bool' : false;
+    }
+    return false;
+}
+
+/** 重建一个白名单标签：属性过白名单、重复取首个、url 项走 md_safe_url。img 无有效 src 整体丢弃。 */
+function md_html_rebuild($name, $isClose, $attrStr, $mode)
+{
+    if ($isClose) {
+        return '</' . $name . '>';                     // 闭标签不带属性（HTML 语义本就忽略属性）
+    }
+    // 自闭合的 / 会被贪婪属性段吞进组里：从尾部剥出（只剥引号外的，引号内的 / 不动）
+    $selfSlash = '';
+    while (md_ends_with(rtrim($attrStr), '/')) {
+        $selfSlash = ' /';
+        $attrStr = substr(rtrim($attrStr), 0, -1);
+    }
+    $out = '<' . $name;
+    $used = array();
+    $imgHasSrc = $name !== 'img';
+    $extHref = null;
+    $rest = ltrim($attrStr);
+    while ($rest !== '') {
+        if (preg_match('/^([a-zA-Z_:][a-zA-Z0-9_:.-]*)(\s*=\s*(?:("[^"]*"|\'[^\']*\'|[^\s"\'>]*)))?/',
+                       $rest, $am) !== 1) {
+            break;                                     // 剩余不成合法属性形态：一律剥除
+        }
+        $an = strtolower($am[1]);
+        $raw = isset($am[3]) ? $am[3] : '';
+        $val = '';
+        if ($raw !== '') {
+            $val = html_entity_decode($raw, ENT_QUOTES, 'UTF-8');
+            if ($val !== '' && ($raw[0] === '"' || $raw[0] === "'")) {
+                $val = substr($val, 1, -1);
+            }
+        }
+        $kind = md_html_attr($name, $an, $mode, $val);
+        if ($kind !== false && !isset($used[$an])) {
+            $used[$an] = true;
+            if ($kind === 'bool') {
+                $out .= ' ' . $an;
+            } else {
+                if ($an === 'href' && $name === 'a') {
+                    $extHref = $val;
+                }
+                if ($an === 'src' && $name === 'img') {
+                    $imgHasSrc = true;
+                }
+                $out .= ' ' . $an . '="' . md_e($val) . '"';
+            }
+        }
+        $rest = ltrim(substr($rest, strlen($am[0])));
+    }
+    if (!$imgHasSrc) {
+        return '';                                     // img 没有 src 必是坏图，整体丢弃
+    }
+    if ($name === 'a' && $extHref !== null
+        && (md_starts_with($extHref, 'http') || md_starts_with($extHref, '//') || md_starts_with($extHref, 'mailto:'))) {
+        $out .= ' target="_blank" rel="noopener"';     // 与 Markdown 外链同一 target/rel 策略
+    }
+    return $out . $selfSlash . '>';
+}
+
+/**
+ * 行级白名单 HTML 通道（输入原始行文本）：
+ *   白名单标签 → 净化重建；非白名单标签 → 保持转义字面（可见不可执行）；
+ *   标签间文本 → 转义后原样拼回。
+ * $stash 为非 null（行内通道，按引用传入）时白名单标签改发占位符并入 stash，
+ * 避免属性值里的 * _ [ 等被后续 Markdown 行内规则误吃；HTML 块通道传 null 嵌真标签。
+ */
+function md_html_filter($raw, $mode, $tags = null, &$stash = null)
+{
+    if ($tags === null) {
+        $tags = md_html_tags_for($mode);
+    }
+    if ($mode === 'off' || strpos($raw, '<') === false) {
+        return md_e($raw);
+    }
+    $inlineMode = $stash !== null;
+    $out = '';
+    $pos = 0;
+    $len = strlen($raw);
+    while (($lt = strpos($raw, '<', $pos)) !== false) {
+        // 引号感知的标签匹配：属性值里的 > 不截断；配不上标签形态的 < 按字面处理
+        if (preg_match('/<(\/?)([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|\'[^\']*\'|[^>"\'])*)(\/?)>/',
+                       $raw, $m, 0, $lt) !== 1) {
+            $out .= md_e(substr($raw, $pos, $lt - $pos)) . '&lt;';
+            $pos = $lt + 1;
+            continue;
+        }
+        if ($lt > $pos) {
+            $out .= md_e(substr($raw, $pos, $lt - $pos));
+        }
+        $name = strtolower($m[2]);
+        if (in_array($name, $tags, true)) {
+            $tag = md_html_rebuild($name, $m[1] !== '', $m[3], $mode);
+            if ($inlineMode) {
+                $stash[] = $tag;
+                $out .= "\x00HT" . (count($stash) - 1) . "\x00";
+            } else {
+                $out .= $tag;
+            }
+        } else {
+            $out .= md_e($m[0]);                       // 非白名单：保持转义字面（可见不可执行）
+        }
+        $pos = $lt + strlen($m[0]);
+    }
+    if ($pos < $len) {
+        $out .= md_e(substr($raw, $pos));
+    }
+    return $out;
+}
+
+function md_inline($text, $htmlMode = 'off')
+{
+    // 行内代码先占位，避免内部内容被后续规则处理（本函数直接吃原文，转义在下面统一做：
+    // 需要在转义前白名单扫描原生 HTML 标签，行内代码的反引号也要在转义前识别）
     $codes = array();
-    $html = preg_replace_callback('/`([^`\n]+)`/', function ($m) use (&$codes) {
-        $codes[] = '<code>' . $m[1] . '</code>';
+    $text = preg_replace_callback('/`([^`\n]+)`/', function ($m) use (&$codes) {
+        $codes[] = '<code>' . md_e($m[1]) . '</code>';
         return "\x00CB" . (count($codes) - 1) . "\x00";
-    }, $html);
+    }, $text);
+
+    // 白名单 HTML 标签抽走占位（v1.21.0）：属性值里的 * _ [ 等不会被下方规则误吃；
+    // 非白名单标签保持转义字面。下方规则处理的文本已 htmlspecialchars 转义，
+    // 尖括号是 &lt; &gt; 形态（与 v1.20.0 及以前由调用方先 md_e 的形态一致）。
+    $htmlStash = array();
+    if ($htmlMode !== 'off') {
+        $html = md_html_filter($text, $htmlMode, md_html_tags_for($htmlMode), $htmlStash);
+    } else {
+        $html = md_e($text);
+    }
 
     // 图片 ![alt](src "title")；src 支持 <...> 角括号包裹（文件名可含空格）。
-    // 注意：进入本函数前文本已经 htmlspecialchars 转义，尖括号是 &lt; &gt; 形态。
     $html = preg_replace_callback(
         '/!\[([^\]]*)\]\(\s*(?:&lt;((?:(?!&gt;).)*)&gt;|([^)\s]+))(?:\s+&quot;([^)]*)&quot;)?\s*\)/',
         function ($m) {
@@ -616,6 +804,13 @@ function md_inline($html)
         return isset($codes[(int)$m[1]]) ? $codes[(int)$m[1]] : '';
     }, $html);
 
+    // 还原白名单 HTML 标签占位（最后一步：标签整段已净化，不再参与规则）
+    if (count($htmlStash) > 0) {
+        $html = preg_replace_callback('/\x00HT(\d+)\x00/', function ($m) use (&$htmlStash) {
+            return isset($htmlStash[(int)$m[1]]) ? $htmlStash[(int)$m[1]] : '';
+        }, $html);
+    }
+
     return $html;
 }
 
@@ -650,6 +845,8 @@ function md_render($text, $cfg = null)
     $out = array();
     $slugs = array();
     $toc = array();
+    $htmlMode = $cfg['html_mode'];
+    $htmlTags = md_html_tags_for($htmlMode);
 
     $i = 0;
     $n = count($lines);
@@ -687,6 +884,18 @@ function md_render($text, $cfg = null)
             continue;
         }
 
+        // 原生 HTML 白名单块（v1.21.0）：行首 ≤3 空格缩进的块级标签（开/闭形态都算）。
+        // CommonMark HTML block 语义：吃到空行为止原样放行，块内不再处理 Markdown 语法
+        // （与 GitHub README 的 <div align="center">…</div> 用法一致）；逐行走白名单净化，
+        // 空行后若有配对的闭标签会开一个新块，与 GitHub 渲染结果一致
+        if ($htmlMode !== 'off' && md_html_block_start($line, $htmlMode)) {
+            while ($i < $n && trim($lines[$i]) !== '') {
+                $out[] = md_html_filter($lines[$i], $htmlMode, $htmlTags);
+                $i++;
+            }
+            continue;
+        }
+
         // 标题
         if (preg_match('/^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$/', $line, $m) === 1) {
             $level = strlen($m[1]);
@@ -694,7 +903,7 @@ function md_render($text, $cfg = null)
             $plain = strip_tags($raw);
             $slug = md_slug($plain, $slugs);
             $toc[] = array('level' => $level, 'text' => $plain, 'id' => $slug);
-            $out[] = '<h' . $level . ' id="' . md_e($slug) . '">' . md_inline(md_e($raw)) . '</h' . $level . '>';
+            $out[] = '<h' . $level . ' id="' . md_e($slug) . '">' . md_inline($raw, $htmlMode) . '</h' . $level . '>';
             $i++;
             continue;
         }
@@ -730,13 +939,13 @@ function md_render($text, $cfg = null)
             }
             $html = '<table><thead><tr>';
             foreach ($header as $cell) {
-                $html .= '<th>' . md_inline(md_e(trim($cell))) . '</th>';
+                $html .= '<th>' . md_inline(trim($cell), $htmlMode) . '</th>';
             }
             $html .= '</tr></thead><tbody>';
             foreach ($rows as $row) {
                 $html .= '<tr>';
                 foreach ($row as $cell) {
-                    $html .= '<td>' . md_inline(md_e(trim($cell))) . '</td>';
+                    $html .= '<td>' . md_inline(trim($cell), $htmlMode) . '</td>';
                 }
                 $html .= '</tr>';
             }
@@ -764,18 +973,19 @@ function md_render($text, $cfg = null)
             $tag = $ordered ? 'ol' : 'ul';
             $html = '<' . $tag . '>';
             foreach ($items as $it) {
-                $html .= '<li>' . md_inline(md_e(trim($it))) . '</li>';
+                $html .= '<li>' . md_inline(trim($it), $htmlMode) . '</li>';
             }
             $html .= '</' . $tag . '>';
             $out[] = $html;
             continue;
         }
 
-        // 普通段落：吃到空行或下一个块级元素
+        // 普通段落：吃到空行或下一个块级元素（HTML 白名单块也算段落边界，v1.21.0）
         $buf = array();
         while ($i < $n && trim($lines[$i]) !== ''
             && preg_match('/^\s{0,3}(#{1,6}\s|>|`{3,}|~{3,}|[-*+]\s|\d+[.)]\s)/', $lines[$i]) !== 1
-            && !md_starts_with(ltrim($lines[$i]), '|')) {
+            && !md_starts_with(ltrim($lines[$i]), '|')
+            && !md_html_block_start($lines[$i], $htmlMode)) {
             $buf[] = trim($lines[$i]);
             $i++;
         }
@@ -783,7 +993,7 @@ function md_render($text, $cfg = null)
             $i++;
             continue;
         }
-        $out[] = '<p>' . md_inline(md_e(implode("\n", $buf))) . '</p>';
+        $out[] = '<p>' . md_inline(implode("\n", $buf), $htmlMode) . '</p>';
     }
 
     $html = implode("\n", $out);
@@ -962,6 +1172,7 @@ function md_search_extract($text)
     $text = md_strip_front_matter($text);
     $text = preg_replace('/```.*?```/s', ' ', $text);       // 代码块内容不参与搜索
     $text = preg_replace('/`[^`]*`/', ' ', $text);          // 行内代码
+    $text = preg_replace('/<[^>]*>/', ' ', $text);          // 原生 HTML 标签（白名单与否均剥，v1.21.0）
     $text = preg_replace('/!\[[^\]]*\]\([^)]*\)/', ' ', $text);  // 图片
     $text = preg_replace('/\[([^\]]*)\]\([^)]*\)/', '$1', $text); // 链接留文字
     $text = preg_replace('/[#*_>~|]/', ' ', $text);         // 常见标记符
@@ -1333,6 +1544,10 @@ function md_config_defaults()
         // （见 md_theme_options_normalize）：主题被删或改声明后，残留值不生效也不会报错
         'theme_options' => array(),
         'url_mode'      => 'simple',
+        // 原生 HTML 白名单档位（v1.21.0）：standard = 推荐集（GitHub README 常用标签），
+        // loose = 追加 style/id/class 与 video/audio，off = 一律字面显示（旧版行为）。
+        // 底线标签（script/iframe 等）任何档位不放行，详见 md_engine 的白名单节
+        'html_mode'     => 'standard',
         'base_path'     => '',
         'home'          => '',
         'ext_md'        => array('md', 'markdown', 'txt'),
@@ -1410,6 +1625,10 @@ function md_config_load()
     // 界面语言白名单：非法值回落 auto（按浏览器自动），防止配置写坏后 md_lang_pack 拼错路径
     if (!isset($cfg['language']) || !in_array($cfg['language'], md_lang_supported(), true)) {
         $cfg['language'] = 'auto';
+    }
+    // 原生 HTML 白名单档位（v1.21.0）：配置写坏回落标准档
+    if (!isset($cfg['html_mode']) || !in_array($cfg['html_mode'], array('off', 'standard', 'loose'), true)) {
+        $cfg['html_mode'] = 'standard';
     }
     // base_path 形态收口（config.php 允许手工编辑，写坏也要能跑）：见 md_base_path_normalize
     $cfg['base_path'] = md_base_path_normalize(isset($cfg['base_path']) ? $cfg['base_path'] : '');
