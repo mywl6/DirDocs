@@ -71,7 +71,9 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
 - 零安装：无安装向导、无路径配置、无数据库、无 composer 依赖
 - 零构建：原生 PHP + CSS 变量换肤，前端无框架
 - 零外联：Bootstrap / 图标字体 / mermaid / 二维码库全部自托管在 `_dir/assets/vendor/`，
-  运行时不向任何第三方域发出请求（可选的 SMTP 发信除外；内网/断网环境可用）
+  运行时不向任何第三方域发出请求；两处例外都须站长在后台显式开启——SMTP 发信
+  （不填主机则全程不发信）与新版本检查（默认关闭，开启后每天至多查一次 GitHub Releases）。
+  内网/断网环境保持默认即可
 - 兼容 PHP 7.1 ~ 8.4（廉价虚拟主机大量停在 7.x）
 - 中英双语界面：`language` 配置可选 auto（按浏览器语言自动）/ zh-CN / en，只翻界面不翻内容
 - 全站打印样式
@@ -96,8 +98,11 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
 
 放在 Web 根目录 = 整个根都是文档；放在 `/docs/` 子目录 = 那一层就是文档站。
 
-**升级**：用新版本的 `_dir/lib/` 与 `_dir/assets/` 覆盖旧的两个目录即可，
-`index.php` 不用动。你的数据（`_dir/config.php`、`_dir/cache/`、`_dir/themes/`）不会被覆盖。
+**升级**：用新版本的 `_dir/lib/` 与 `_dir/assets/` 覆盖旧的两个目录即可
+（程序版本号在 `_dir/lib/version.php`，随 lib 一起更新，`index.php` 不用动）。
+你的数据（`_dir/config.php`、`_dir/cache/`）不会被覆盖。主题：自建/改过的主题不用动；
+一直用内置版式（未改过 `_dir/themes/default/`）的站点需一并覆盖 `_dir/themes/default/`，
+才能拿到新版式与页脚。
 各版本变更见 [CHANGELOG.md](CHANGELOG.md)。
 
 **瘦身**：不需要 mermaid 图表就删掉 `_dir/assets/vendor/mermaid.min.js`（约 3.2MB）——
@@ -108,7 +113,7 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
 
 浏览器打开 **`http://你的域名/index.php?a=admin`**（或点任一页面右下角的"后台"链接）。
 
-首次进入先设定管理员密码（至少 8 位），之后用密码登录。后台只做五件事：
+首次进入先设定管理员密码（至少 8 位），之后用密码登录。后台做五件事：
 
 1. **站点设置**——标题、副标题、主题、界面语言、路由模式、白名单后缀、改密码
 2. **文档管理**——在线编辑/新建 Markdown（大编辑请用本地编辑器，网页编辑用于救急）；
@@ -117,18 +122,22 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
 4. **缓存管理**——重建/清除索引，查看最近更新
 5. **评论管理**——访客评论先审后显：待审清单、批准、删除
 
+设置页还有一张**新版本检查**卡（默认关闭）：开启后后台每天至多查一次 GitHub Releases，
+有新版时概览的「程序版本」行旁出现一枚可点徽标。检查结果缓存在 `_dir/cache/update.json`，
+网络不可达时安静标为「检查失败」，不影响任何功能。
+
 登录失败 5 次锁定 10 分钟。
 
 ## 目录里各文件的角色
 
 | 路径 | 角色 | 升级时 |
 |---|---|---|
-| `index.php` | 入口：boot + 加载 + 路由分发 | **不变** |
-| `_dir/lib/*.php` | 业务代码（engine/i18n/pages/theme/admin 五模块）与 `lang/` 语言包 | 覆盖 |
+| `index.php` | 入口：boot + 加载 + 路由分发（版本号读取也在这） | 极少变 |
+| `_dir/lib/` | 业务代码（engine/i18n/pages/theme/admin 五模块）、版本号 `version.php`、`lang/` 语言包 | 覆盖 |
 | `_dir/assets/` | 内置 CSS/脚本 + 自托管三方库（`vendor/`：Bootstrap/图标/mermaid/qrcode） | 覆盖 |
 | `_dir/config.php` | 你的站点配置 | 不动 |
 | `_dir/cache/` | 索引缓存（可随时删） | 不动 |
-| `_dir/themes/` | 你的自定义主题 | 不动 |
+| `_dir/themes/` | 你的自定义主题（内置版式更新见「升级」节说明） | 改过的不动 |
 | 其余目录 | 你的文档与附件 | 不动 |
 
 ## 安全设计
@@ -152,6 +161,9 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
   重写规则对这四类后缀同样不直出（后台规则生成器已包含）。
 - **唯一执行面**：整个站点可执行的只有 `index.php`；`_dir/lib/*.php` 带 `MD_BOOT`
   闸门，被直接 Web 访问时输出 403，一行代码不执行。
+- **站内跳转**：后台的跳转目标、canonical、资产 URL 全部由程序内的路径前缀拼出，
+  拼装前统一收口为「空 或 单个前导斜杠 + 纯路径」——前缀里即便混进主机名
+  （`//host/...`）或 scheme，也只会被浏览器当成本站路径，不产生站外跳转。
 - **`_dir` 目录双层防护**：程序自动生成 `_dir/.htaccess`（Apache 整目录拒绝直访；
   资产与附件全部走程序通道，拒绝直访零功能损失），缺失时每次启动自动补种；
   修订版本文件是带闸门的 PHP 数据文件，被直接访问时输出 403 空白——即使服务器
@@ -167,6 +179,8 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
   `script-src 'self'`、`form-action 'self'`、`base-uri 'self'`）。
   全资源自托管后策略是纯本站，不放行任何第三方域；
   `style-src` 保留 `unsafe-inline` 仅为程序生成的主题变量块。
+  页面上出现的站外地址（页脚/后台的项目主页）都是**普通链接与标识**，不是页面的资源引用，
+  不由浏览器自动加载，CSP 与零外联策略都不受影响。
 - **HTTP 层**：ETag/304 条件请求、单区间 Range（206/416 边界处理）、
   界面语言为自动模式时下发 `Vary: Accept-Language`（共享缓存按语言区分）、
   `display_errors` 强制关闭不泄露路径。
@@ -251,7 +265,10 @@ None of the above relies on any cloud service. It stands on a deliberately modes
 - Zero build: native PHP + CSS-variable theming, no frontend framework
 - Zero outbound requests: Bootstrap / icon fonts / mermaid / the QR library are all
   self-hosted under `_dir/assets/vendor/`; at runtime nothing is requested from any
-  third-party domain (optional SMTP sending excepted; intranet/offline environments work)
+  third-party domain. Two exceptions exist, both off until the owner opts in on the
+  admin: SMTP sending (nothing is sent while the host field is empty) and the update
+  check (off by default; once enabled it queries GitHub Releases at most once a day).
+  Intranet/offline installs can leave both untouched
 - Compatible with PHP 7.1 ~ 8.4 (cheap shared hosting is largely stuck on 7.x)
 - Bilingual UI: the `language` config accepts auto (follows the browser) / zh-CN / en —
   UI chrome only, never your content
@@ -279,9 +296,13 @@ your-dir/
 
 At the web root, the whole root is the docs; under `/docs/`, that level is the site.
 
-**Upgrading**: overwrite the old `_dir/lib/` and `_dir/assets/` with the new versions —
-`index.php` stays untouched, and so does your data (`_dir/config.php`, `_dir/cache/`,
-`_dir/themes/`). Per-version changes: [CHANGELOG.md](CHANGELOG.md) (Chinese).
+**Upgrading**: overwrite the old `_dir/lib/` and `_dir/assets/` with the new versions
+(the version number lives in `_dir/lib/version.php` and travels with `lib/`; `index.php`
+stays untouched). Your data (`_dir/config.php`, `_dir/cache/`) is never overwritten.
+Themes you created or customized stay untouched; if you have always used the built-in
+look (never modified `_dir/themes/default/`), also overwrite that directory to pick up
+the new layout and footer.
+Per-version changes: [CHANGELOG.md](CHANGELOG.md) (Chinese).
 
 **Slimming**: don't need mermaid diagrams? Delete `_dir/assets/vendor/mermaid.min.js`
 (~3.2 MB) — the runtime detects its absence, chart blocks render as source code, and
@@ -306,18 +327,24 @@ things:
 4. **Cache** — rebuild/clear indexes, view recent updates
 5. **Comments** — visitor comments are held for approval: pending list, approve, delete
 
+Settings also carries an **Update check** card (off by default): once enabled the admin
+queries GitHub Releases at most once a day, and a clickable badge appears next to "App
+version" on the overview when a newer release exists. The result is cached in
+`_dir/cache/update.json`; an unreachable network merely shows "check failed" and never
+affects anything else.
+
 Five failed logins lock the account for 10 minutes.
 
 ## What each file does
 
 | Path | Role | On upgrade |
 |---|---|---|
-| `index.php` | Entry: boot + load + route | **never changes** |
-| `_dir/lib/*.php` | Business code (engine/i18n/pages/theme/admin modules) + `lang/` packs | overwrite |
+| `index.php` | Entry: boot + load + route | rarely changes |
+| `_dir/lib/` | Business code (engine/i18n/pages/theme/admin) + `version.php` + `lang/` packs | overwrite |
 | `_dir/assets/` | Built-in CSS/JS + self-hosted vendor libs (Bootstrap/icons/mermaid/qrcode) | overwrite |
 | `_dir/config.php` | Your site config | untouched |
 | `_dir/cache/` | Index cache (safe to delete) | untouched |
-| `_dir/themes/` | Your custom themes | untouched |
+| `_dir/themes/` | Your custom themes (built-in layout updates: see "Upgrading") | yours untouched |
 | everything else | Your docs and attachments | untouched |
 
 <a id="security-design"></a>
@@ -345,6 +372,11 @@ Every mechanism is listed in the open — verify each against the source:
   every other context (direct link, iframe, object) still forces a download. Chinese
   filenames follow RFC 5987; pretty-mode rewrite rules never serve these four extensions
   statically either (the admin rule generator includes this).
+- **Same-site navigation**: admin redirect targets, canonicals and asset URLs are all
+  built from the program's own path prefix, which is normalized to "empty or a single
+  leading slash + plain path" before assembly — even if the prefix somehow carries a
+  hostname (`//host/...`) or a scheme, browsers resolve it as a local path, so no
+  off-site redirect ever comes out of it.
 - **One executable surface**: the only executable file in the whole site is `index.php`;
   `_dir/lib/*.php` files carry an `MD_BOOT` gate and answer direct web access with a 403
   without executing a single line.
@@ -365,6 +397,9 @@ Every mechanism is listed in the open — verify each against the source:
   `script-src 'self'`, `form-action 'self'`, `base-uri 'self'`). With everything
   self-hosted the policy is purely same-origin — no third-party domain is allowed;
   `style-src` keeps `unsafe-inline` only for the program-generated theme variable block.
+  Off-site addresses shown on a page (the footer / admin "project home") are plain links
+  and identity text, never resource references — the browser does not fetch them, so the
+  CSP and the zero-outbound policy are unaffected.
 - **HTTP layer**: ETag/304 conditional requests, single-range support (206/416 edge
   handling), `Vary: Accept-Language` when the UI language is auto (shared caches vary by
   language), and `display_errors` forced off so paths never leak.

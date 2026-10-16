@@ -117,7 +117,7 @@ h1{font-size:2rem;line-height:1.35;margin:.2em 0 .6em;letter-spacing:.01em}
   <?php endif; ?>
 
   <div class="ocean-foot">
-    <span>Powered by DirDocs <?php echo md_e(MD_VERSION); ?> · <?php echo md_e(md_t('ocean_theme_label')); ?></span>
+    <span>Powered by <a href="<?php echo md_e(md_project_url()); ?>" target="_blank" rel="noopener" title="<?php echo md_e(md_t('powered_by_title')); ?>">DirDocs <?php echo md_e(MD_VERSION); ?></a> · <?php echo md_e(md_t('ocean_theme_label')); ?></span>
     <span><?php echo md_e(md_t('ocean_theme_dir')); ?><code>_dir/themes/<?php echo md_e($theme); ?></code></span>
   </div>
 </div>

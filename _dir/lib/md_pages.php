@@ -1064,6 +1064,9 @@ function md_rss_xml($cfg, $origin, array $entries)
         . '<feed xmlns="http://www.w3.org/2005/Atom">' . "\n"
         . '  <title>' . md_e($title) . "</title>\n"
         . ($desc !== '' ? '  <subtitle>' . md_e($desc) . "</subtitle>\n" : '')
+        // 生成器溯源（v1.18.0）：Atom 规范给 generator 定义了 uri 属性，专为此用；
+        // 只影响订阅源的元数据，不影响条目与阅读器行为
+        . '  <generator uri="' . md_e(md_project_url()) . '">DirDocs ' . md_e(MD_VERSION) . "</generator>\n"
         . '  <id>' . md_e($homeUrl) . "</id>\n"
         . '  <link rel="alternate" href="' . md_e($homeUrl) . "\"/>\n"
         . '  <link rel="self" href="' . md_e($selfUrl) . "\"/>\n"

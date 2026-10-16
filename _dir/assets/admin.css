@@ -54,6 +54,14 @@
 .admin-stack{display:flex;flex-direction:column;gap:1.1rem}
 .admin-stack>.alert{margin:0}
 .admin-foot{margin-top:3rem;font-size:.75rem;color:var(--text2)}
+/* 后台里的站外链接（项目主页）：默认下划线以示可点，悬停转强调色；
+   只作用于显式带 .admin-ext 的链接，不动导航/按钮/表格里已有的链接样式 */
+.admin-ext{color:var(--text2);text-decoration:underline;text-underline-offset:.18em}
+.admin-ext:hover{color:var(--accent)}
+.admin-ext:focus-visible{color:var(--accent)}
+/* 图标改为原子级内联盒：CSS 的文字装饰不下传到 inline-block 子元素，
+   否则下划线会一路画到图标底下（观感上是穿过了图标） */
+.admin-ext .ad-ico{display:inline-block;vertical-align:-.12em}
 
 /* ---- 卡片内部结构（.card 本体来自 builtin.css；此处只规整内部节奏） ---- */
 .admin-main .card{padding:0;overflow:hidden}
@@ -422,3 +430,10 @@
 
 /* ---- 草稿标记（v1.15.0）：琥珀色区别于 NEW 的蓝 ---- */
 .admin-tree-tag-draft{background:var(--warn-weak);color:var(--warn)}
+
+/* ---- 新版本徽标（v1.18.0）：概览「程序版本」行尾，可点进发行页 ---- */
+.admin-upd-badge{
+  margin-left:.35rem;color:var(--accent);background:var(--accent-weak);
+  border-color:transparent;text-decoration:none;
+}
+.admin-upd-badge:hover{color:var(--accent);background:var(--accent-weak);filter:brightness(.96)}

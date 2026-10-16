@@ -6,7 +6,7 @@
  * 零配置、无数据库；兼容 PHP 7.1 ~ 8.4。
  *
  * 本文件只做三件事：
- *   1. boot：定义常量（MD_ROOT / MD_DIR / MD_BOOT / MD_READONLY）
+ *   1. boot：定义常量（MD_VERSION / MD_ROOT / MD_DIR / MD_BOOT / MD_READONLY）
  *   2. load：加载 _dir/lib/ 下的五个模块（带 MD_BOOT 闸门）
  *   3. route：按 action/query 分发到各模块的入口函数
  *
@@ -16,6 +16,7 @@
  *   md_pages.php   前台（页面动作/模板辅助/附件/风险检测）
  *   md_theme.php   主题（CSS 变量/页面模板/用户主题）
  *   md_admin.php   后台（鉴权/界面/四功能/分发）
+ * 版本号数据文件：_dir/lib/version.php（随 lib 覆盖升级；本文件里的串只是兜底）。
  * 内置样式与行为脚本在 _dir/assets/（builtin.css / builtin.js / theme-init.js，后台另有 admin.css / admin.js），
  * 三方前端库（Bootstrap/图标/mermaid/qrcode）自托管在 _dir/assets/vendor/，运行时零外部请求。
  * 语言包在 _dir/lib/lang/（内置，随升级覆盖）。
@@ -29,7 +30,26 @@ ini_set('display_errors', '0');   // 错误进日志，不回显（避免路径/
 
 // ---------------------------------------------------------------- boot
 
-define('MD_VERSION', '1.17.1');
+// 闸门常量：lib 文件被 Web 直接访问时此常量不存在，文件头会拒绝执行。
+// 在读取版本文件之前定义——_dir/lib/version.php 也带同一道闸门。
+define('MD_BOOT', 1);
+
+/**
+ * 程序版本：权威源是 _dir/lib/version.php（升级覆盖 _dir/lib/ 时随之一并更新），
+ * 本文件里的串只作兜底。版本号必须落在升级会覆盖的位置——否则只更新 lib/ 的安装
+ * 永远停在旧版本号上，新版本检查会一直提示「有新版」而升级后依旧。
+ */
+$md_version = '1.18.0';
+$md_verfile = __DIR__ . '/_dir/lib/version.php';
+if (is_file($md_verfile)) {
+    $md_v = @include $md_verfile;
+    if (is_array($md_v) && isset($md_v['version'])
+        && preg_match('/^\d+\.\d+(\.\d+)?$/', (string)$md_v['version']) === 1) {
+        $md_version = (string)$md_v['version'];
+    }
+}
+define('MD_VERSION', $md_version);
+unset($md_version, $md_verfile, $md_v);
 define('MD_ROOT', realpath(__DIR__));
 define('MD_DIR', MD_ROOT . '/_dir');
 define('MD_DIRNAME', '_dir');
@@ -63,9 +83,6 @@ if (function_exists('mb_internal_encoding')) { mb_internal_encoding('UTF-8'); }
 if (function_exists('mb_language')) { mb_language('uni'); }
 
 // ---------------------------------------------------------------- load
-
-// 闸门常量：lib 文件被 Web 直接访问时此常量不存在，文件头会拒绝执行
-define('MD_BOOT', 1);
 
 $md_libs = array('md_engine.php', 'md_i18n.php', 'md_pages.php', 'md_theme.php', 'md_admin.php');
 foreach ($md_libs as $lib) {

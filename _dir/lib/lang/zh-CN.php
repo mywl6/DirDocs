@@ -67,6 +67,7 @@ return array(
     'attachments'      => '附件',
     'edit_this_page'   => '编辑此页',
     'admin_link'       => '后台',
+    'powered_by_title' => 'DirDocs 项目主页（GitHub）',
     'back_home'        => '返回首页',
     'err_404'          => '页面不存在。',
     'err_403'          => '无权访问。',
@@ -137,6 +138,8 @@ return array(
     'admin_kv_php'        => 'PHP 版本',
     'admin_kv_version'    => '程序版本',
     'admin_kv_writable'   => '写入状态',
+    'admin_kv_project'    => '项目主页',
+    'admin_foot_project'  => '项目主页',
     'admin_writable_no'   => '只读（_dir 不可写，后台写功能受限）',
     'admin_writable_yes'  => '可写',
     'admin_recent_empty'  => '还没有文档。到「文档」页新建第一篇。',
@@ -356,6 +359,28 @@ return array(
     'admin_flash_site'  => '站点设置已保存。',
     'admin_flash_user'  => '登录账号已修改。下次登录请用新账号。',
     'admin_flash_pass'  => '密码已修改。下次登录请用新密码。',
+
+    // ---- 后台：新版本检查（v1.18.0）----
+    'admin_upd_title'       => '新版本检查',
+    'admin_upd_on'          => '检查新版本（默认关闭）',
+    'admin_upd_hint'        => '开启后，后台每天至多向 GitHub Releases 查询一次最新版本号（出站请求只有这一处，'
+        . '不携带任何站点或用户数据；内网/离线部署保持关闭即可）。检查结果缓存在 '
+        . '<code>_dir/cache/update.json</code>，关闭开关不影响已存结果。',
+    'admin_flash_upd'       => '版本检查设置已保存。',
+    'admin_flash_upd_ok'    => '已检查：拿到最新版本号。',
+    'admin_flash_upd_fail'  => '检查失败：本次没有取到版本号（网络不可达、被限流或服务器环境不允许出站）。'
+        . '后台功能不受影响，稍后可再试。',
+    'admin_upd_kv_current'  => '当前版本',
+    'admin_upd_kv_latest'   => '最新版本',
+    'admin_upd_never'       => '尚未检查',
+    'admin_upd_failed'      => '检查失败（未能取到版本号）',
+    'admin_upd_uptodate'    => '已是最新版本',
+    'admin_upd_found'       => '有新版本 {v}',
+    'admin_upd_checked_at'  => '上次检查',
+    'admin_upd_stale'       => '（结果已过期，重新勾选并保存即可刷新）',
+    'admin_upd_now_btn'     => '立即检查',
+    'admin_upd_page_btn'    => '打开发行页',
+    'admin_upd_new'         => '有新版本 {v}',
     'admin_err_ro_save'        => '保存失败：_dir 不可写。',
     'admin_err_oldpw_user'     => '原密码不正确，账号未修改。',
     'admin_err_newuser'        => '新账号不合法：限 1~64 字符，不得含空格与 / \\ < > " \' 等字符。',
@@ -399,6 +424,7 @@ return array(
         . '在此登记后不再警示。精确匹配豁免单个文件；以 / 结尾豁免整个目录。'
         . '只关闭警示——这些文件依然不进文档树，不会被本程序输出。',
     'admin_save_settings' => '保存设置',
+
     'admin_pretty_title'  => '伪静态规则',
     'admin_pretty_hint'   => '把下面规则加入你的服务器配置（按实际安装路径调整前缀）。'
         . '注意 <code>$uri/</code> 必须去掉，否则目录页会被 autoindex 拦截而 403。',

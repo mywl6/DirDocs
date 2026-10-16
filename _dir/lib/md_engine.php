@@ -115,10 +115,33 @@ function md_rel($abs)
     return substr($abs, strlen($root) + 1);
 }
 
+/**
+ * base_path 形态收口：结果要么是空串，要么是「恰好一个前导斜杠 + 纯路径段」。
+ *
+ * 两个来源（config.php 的手工值 / SCRIPT_NAME 自动探测）都在这里汇聚，收口放这一处，
+ * 所有 URL 拼装点（文档链接、资产、canonical、sitemap、后台跳转、登录 cookie path）
+ * 自动受益，不必各自防御。
+ *
+ * 为什么必须收：前缀一旦以多个斜杠开头（`//host/...`），浏览器按「协议相对地址」解析，
+ * 指向站外主机；带 scheme（`https://host/...`）同样会被解析成绝对地址。这两种形态下
+ * pretty 模式拼出的重定向目标、canonical、资产 URL 会一起跑到站外。收口后结果恒以单个
+ * `/` 开头，浏览器只会当成同站路径（`/https:/host/x` 仍是本机路径），语义与写入侧
+ * `md_config_set` 原有归一化一致，不引入新行为。
+ */
+function md_base_path_normalize($path)
+{
+    $path = trim(str_replace('\\', '/', (string)$path));
+    $path = trim($path, '/');
+    if ($path === '') {
+        return '';
+    }
+    return '/' . $path;
+}
+
 function md_base_path($cfg)
 {
     if (isset($cfg['base_path']) && $cfg['base_path'] !== '') {
-        return rtrim($cfg['base_path'], '/');
+        return md_base_path_normalize($cfg['base_path']);
     }
     // 自动检测：SCRIPT_NAME 是 PHP 入口相对 Web 根的路径。
     // dirname 在 Windows 上可能返回反斜杠（根安装时恰为 '\'），须归一化回 /，
@@ -130,7 +153,7 @@ function md_base_path($cfg)
     if ($dir === '.' || $dir === '/' || $dir === '') {
         return '';
     }
-    return $dir;
+    return md_base_path_normalize($dir);
 }
 
 function md_url_encode($rel)
@@ -241,6 +264,26 @@ function md_url_abs($origin, $rel)
         return '';
     }
     return $origin . ($rel[0] === '?' ? '/' . $rel : $rel);
+}
+
+/**
+ * 仓库标识（owner/name）：仓库地址的唯一源头，GitHub 网页地址与 API 地址都从它拼。
+ * 写死在程序里、不接受任何输入；换仓库只改这一处。
+ */
+function md_project_repo()
+{
+    return 'mywl6/DirDocs';
+}
+
+/**
+ * 项目主页（本程序自己的仓库，非站点地址）：页脚「Powered by」、后台站点信息/页脚、
+ * 版本检查的发行页、Atom 溯源元素都指向它。$path 用于取子地址（如 'releases/latest'）。
+ */
+function md_project_url($path = '')
+{
+    $url = 'https://github.com/' . md_project_repo();
+    $path = trim((string)$path, '/');
+    return $path === '' ? $url : $url . '/' . $path;
 }
 
 function md_is_hidden($name, $cfg)
@@ -1309,6 +1352,9 @@ function md_config_defaults()
         // 访客评论（v1.17.0）：以 <文档名>.cmt.php 形式存放在文档旁（首行 PHP 执行锁），
         // 先审后显，后台「评论」页批准。false 整站关闭评论面（端点 404、区块不渲染）
         'comments'      => true,
+        // 新版本检查（v1.18.0，随包休眠）：false = 不发任何出站请求。站长在后台显式
+        // 开启后才会访问 api.github.com 取 Release 号（详见 md_admin.php 版本检查节）
+        'update_check'  => false,
         // 邮件通知（随包休眠）：smtp_host 留空 = 不发任何信、零外联。secure 取值
         // ''（STARTTLS 自动升级）/ 'ssl'（隐式 TLS，常配 465）/ 'none'（仅内网中继）
         'smtp_host'     => '',
@@ -1348,10 +1394,14 @@ function md_config_load()
     if (!isset($cfg['language']) || !in_array($cfg['language'], md_lang_supported(), true)) {
         $cfg['language'] = 'auto';
     }
+    // base_path 形态收口（config.php 允许手工编辑，写坏也要能跑）：见 md_base_path_normalize
+    $cfg['base_path'] = md_base_path_normalize(isset($cfg['base_path']) ? $cfg['base_path'] : '');
     // 评论与邮件通知（v1.17.0）：布尔与字符串守卫，配置写坏也不影响主流程
     if (!isset($cfg['comments'])) {
         $cfg['comments'] = true;
     }
+    // 版本检查（v1.18.0）：配置写坏（字符串/数组）一律按「关」处理——只认真值布尔
+    $cfg['update_check'] = !empty($cfg['update_check']);
     foreach (array('smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'smtp_from', 'smtp_secure', 'notify_email') as $k) {
         if (!isset($cfg[$k]) || !is_string($cfg[$k])) {
             $cfg[$k] = md_config_defaults()[$k];

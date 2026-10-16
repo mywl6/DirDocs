@@ -102,7 +102,7 @@ if (!defined('MD_BOOT')) {
       <section class="md-attach"><h2><?php echo md_e(md_t('attachments')); ?></h2><?php echo $ctx['attach_html']; ?></section>
       <?php endif; ?>
       <footer class="md-footer-meta">
-        <span>Powered by DirDocs <?php echo md_e(MD_VERSION); ?></span>
+        <span>Powered by <a href="<?php echo md_e(md_project_url()); ?>" target="_blank" rel="noopener" title="<?php echo md_e(md_t('powered_by_title')); ?>"><i class="bi bi-github" aria-hidden="true"></i>DirDocs <?php echo md_e(MD_VERSION); ?></a></span>
         <span class="md-footer-links">
           <?php if ($hasAdmin): ?>
             <?php if (!empty($ctx['edit_url'])): ?><a href="<?php echo md_e($ctx['edit_url']); ?>"><i class="bi bi-pencil-square" aria-hidden="true"></i><?php echo md_e(md_t('edit_this_page')); ?></a><?php endif; ?>

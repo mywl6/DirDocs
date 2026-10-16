@@ -65,6 +65,7 @@ return array(
     'attachments'      => 'Attachments',
     'edit_this_page'   => 'Edit this page',
     'admin_link'       => 'Admin',
+    'powered_by_title' => 'DirDocs project home (GitHub)',
     'back_home'        => 'Back to home',
     'err_404'          => 'Page not found.',
     'err_403'          => 'Access denied.',
@@ -145,6 +146,8 @@ return array(
     'admin_kv_php'        => 'PHP version',
     'admin_kv_version'    => 'App version',
     'admin_kv_writable'   => 'Write access',
+    'admin_kv_project'    => 'Project home',
+    'admin_foot_project'  => 'Project home',
     'admin_writable_no'   => 'Read-only (_dir not writable; admin write features limited)',
     'admin_writable_yes'  => 'Writable',
     'admin_recent_empty'  => 'No documents yet. Create the first one on the Documents page.',
@@ -383,6 +386,28 @@ return array(
     'admin_err_oldpw_pass'     => 'Current password is incorrect; password unchanged.',
     'admin_err_newpw_short'    => 'New password must be at least 8 characters.',
     'admin_err_newpw_mismatch' => 'The two new passwords do not match.',
+
+    // ---- Admin: update check (v1.18.0) ----
+    'admin_upd_title'       => 'Update check',
+    'admin_upd_on'          => 'Check for new versions (off by default)',
+    'admin_upd_hint'        => 'When enabled, the admin queries GitHub Releases for the latest version number at most once a day. '
+        . 'This is the only outbound request in the program; it carries no site or user data. Leave it off on intranet/offline installs. '
+        . 'The result is cached in <code>_dir/cache/update.json</code>; turning the switch off keeps the stored result.',
+    'admin_flash_upd'       => 'Update-check settings saved.',
+    'admin_flash_upd_ok'    => 'Checked: latest version retrieved.',
+    'admin_flash_upd_fail'  => 'Check failed: no version number retrieved (network unreachable, rate-limited, or outbound not allowed here). '
+        . 'The admin is unaffected; try again later.',
+    'admin_upd_kv_current'  => 'Current version',
+    'admin_upd_kv_latest'   => 'Latest version',
+    'admin_upd_never'       => 'Not checked yet',
+    'admin_upd_failed'      => 'Check failed (no version retrieved)',
+    'admin_upd_uptodate'    => 'Up to date',
+    'admin_upd_found'       => 'New version {v} available',
+    'admin_upd_checked_at'  => 'Last checked',
+    'admin_upd_stale'       => ' (stale — re-enable and save to refresh)',
+    'admin_upd_now_btn'     => 'Check now',
+    'admin_upd_page_btn'    => 'Open releases page',
+    'admin_upd_new'         => 'New version {v}',
     'admin_mode_auto'   => 'Auto (follow system)',
     'admin_mode_light'  => 'Light',
     'admin_mode_dark'   => 'Dark',
@@ -422,6 +447,7 @@ return array(
         . 'rewriting), register it here to silence the warning. An exact match exempts one file; a trailing / exempts an entire '
         . 'folder. This only silences the warning — the files still stay out of the document tree and are never served by this program.',
     'admin_save_settings' => 'Save settings',
+
     'admin_pretty_title'  => 'Rewrite rules',
     'admin_pretty_hint'   => 'Add the rules below to your server configuration (adjust the prefix to your install path). Make '
         . 'sure to drop <code>$uri/</code>, or directory pages hit autoindex and return 403.',

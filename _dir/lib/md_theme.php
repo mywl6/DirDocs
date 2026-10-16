@@ -413,6 +413,9 @@ function md_page($ctx)
     // RSS/Atom 订阅发现（v1.13.0）：?a=rss 与路由模式无关，两种模式下都走查询串
     $meta .= '<link rel="alternate" type="application/atom+xml" title="' . md_e($siteTitle)
         . '" href="?a=rss">' . "\n";
+    // 生成器声明（v1.18.0）：页面不可见，给源码查看者与自动化工具一条溯源线索；
+    // 站外地址只作为标识出现，不是资源引用，CSP / 零外联策略都不受影响
+    $meta .= '<meta name="generator" content="DirDocs ' . md_e(MD_VERSION) . ' (' . md_e(md_project_url()) . ')">' . "\n";
     $canonAbs = '';
     if (isset($ctx['seo_canonical']) && (string)$ctx['seo_canonical'] !== '' && $origin !== '') {
         $canonAbs = md_url_abs($origin, (string)$ctx['seo_canonical']);

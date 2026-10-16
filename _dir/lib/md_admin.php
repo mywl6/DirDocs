@@ -831,7 +831,7 @@ function md_config_set($patch)
                    'show_attach', 'order_prefix', 'admin_pass', 'admin_user', 'admin_totp',
                    'base_path', 'site_url', 'risk_ignore',
                    'comments', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass',
-                   'smtp_from', 'smtp_secure', 'notify_email');
+                   'smtp_from', 'smtp_secure', 'notify_email', 'update_check');
     $cfg = md_config_load();
     foreach ($patch as $k => $v) {
         if (in_array($k, $allow, true)) {
@@ -882,13 +882,9 @@ function md_config_set($patch)
         }
     }
     $cfg['risk_ignore'] = $riClean;
-    // base_path 只允许空或以 / 开头且不以 / 结尾
-    $cfg['base_path'] = trim((string)$cfg['base_path']);
-    if ($cfg['base_path'] !== '' && $cfg['base_path'] !== '/') {
-        $cfg['base_path'] = '/' . trim($cfg['base_path'], '/');
-    } elseif ($cfg['base_path'] === '/') {
-        $cfg['base_path'] = '';
-    }
+    // base_path 只允许空或以 / 开头且不以 / 结尾（与 md_base_path_normalize 同一形态，
+    // 写入侧就收口，坏值不落到 config.php）
+    $cfg['base_path'] = md_base_path_normalize($cfg['base_path']);
     // site_url：空串合法；没写协议前缀的（docs.example.com）补 https://；去掉尾斜杠
     $cfg['site_url'] = trim((string)$cfg['site_url']);
     if ($cfg['site_url'] !== '' && !preg_match('#^https?://#i', $cfg['site_url'])) {
@@ -977,6 +973,8 @@ function md_admin_ico($name)
         'list'    => 'list-ul',
         'close'   => 'x-lg',
         'ok'      => 'check2',
+        'refresh' => 'arrow-clockwise',
+        'github'  => 'github',
     );
     if (!isset($icons[$name])) {
         return '';
@@ -1149,7 +1147,9 @@ function md_admin_page($title, $body, $navKey = '', $extraScripts = array())
         . '<div class="admin-stage">'
         . '<header class="admin-head"><h1>' . md_e($title) . '</h1></header>'
         . $body
-        . '<footer class="admin-foot">DirDocs ' . md_e(MD_VERSION) . ' · PHP ' . md_e(PHP_VERSION) . '</footer>'
+        . '<footer class="admin-foot">DirDocs ' . md_e(MD_VERSION) . ' · PHP ' . md_e(PHP_VERSION)
+        . ' · <a class="admin-ext" href="' . md_e(md_project_url()) . '" target="_blank" rel="noopener"'
+        . ' title="' . md_e(md_t('powered_by_title')) . '">' . md_e(md_t('admin_foot_project')) . '</a></footer>'
         . '</div></main></div>';
     echo md_admin_body_scripts($cfg, $extraScripts);
     echo '</body></html>';
@@ -1373,10 +1373,17 @@ function md_admin_home($tree, $cfg)
         . '<tr><th>' . md_e(md_t('admin_kv_theme')) . '</th><td><code>' . md_e($cfg['theme']) . '</code></td></tr>'
         . '<tr><th>' . md_e(md_t('admin_kv_cache')) . '</th><td>' . $cacheState . '</td></tr>'
         . '<tr><th>' . md_e(md_t('admin_kv_php')) . '</th><td>' . md_e(PHP_VERSION) . '</td></tr>'
-        . '<tr><th>' . md_e(md_t('admin_kv_version')) . '</th><td>' . md_e(MD_VERSION) . '</td></tr>'
+        // 徽标只在开关开启时出现：关掉检查后不该继续拿旧结论提示「有新版本」
+        // （上次结果仍留在设置卡里，并标为已过期，供站长复查）
+        . '<tr><th>' . md_e(md_t('admin_kv_version')) . '</th><td>' . md_e(MD_VERSION)
+        . (!empty($cfg['update_check']) ? md_update_badge(md_update_auto($cfg)) : '') . '</td></tr>'
         . '<tr><th>' . md_e(md_t('admin_kv_writable')) . '</th><td>' . md_e($cfg['read_only']
             ? md_t('admin_writable_no')
             : md_t('admin_writable_yes')) . '</td></tr>'
+        // 项目主页：装机信息面板里给站长一条通往仓库的明路（与页脚同一个地址出处）
+        . '<tr><th>' . md_e(md_t('admin_kv_project')) . '</th><td>'
+        . '<a class="admin-ext" href="' . md_e(md_project_url()) . '" target="_blank" rel="noopener">'
+        . md_admin_ico('github') . md_e(md_project_repo()) . '</a></td></tr>'
         . '</tbody></table></div></section>';
 
     // 最近更新 10 条
@@ -2907,6 +2914,32 @@ function md_admin_settings($cfg)
             } else {
                 $msg = '<div class="alert alert-danger">' . md_e(md_t('admin_err_ro_save')) . '</div>';
             }
+        } elseif ($act === 'upd') {
+            // 版本检查（v1.18.0）：勾选框 = 允许每日自动检查（默认关，零出站）
+            if (md_config_set(array('update_check' => !empty($_POST['update_check'])))) {
+                header('Location: ' . md_admin_url('config', array('saved' => 'upd')));
+                exit;
+            }
+            $msg = '<div class="alert alert-danger">' . md_e(md_t('admin_err_ro_save')) . '</div>';
+        } elseif ($act === 'upd_now') {
+            // 「立即检查」：与开关同一表单，按钮只在开关已开时渲染。出站授权以开关为唯一凭据，
+            // 关着收到这个 POST（伪造/手工构造）也只落开关、不联网——零出站不留例外通道
+            $updOn = !empty($_POST['update_check']);
+            if (MD_READONLY) {
+                $msg = '<div class="alert alert-danger">' . md_e(md_t('admin_err_ro_save')) . '</div>';
+            } elseif (!$updOn) {
+                if (md_config_set(array('update_check' => false))) {
+                    header('Location: ' . md_admin_url('config', array('saved' => 'upd')));
+                    exit;
+                }
+                $msg = '<div class="alert alert-danger">' . md_e(md_t('admin_err_ro_save')) . '</div>';
+            } elseif (!md_config_set(array('update_check' => true))) {
+                $msg = '<div class="alert alert-danger">' . md_e(md_t('admin_err_ro_save')) . '</div>';
+            } else {
+                $st = md_update_check(true);
+                header('Location: ' . md_admin_url('config', array('saved' => $st['ok'] ? 'upd_ok' : 'upd_fail')));
+                exit;
+            }
         }
     }
 
@@ -2914,9 +2947,14 @@ function md_admin_settings($cfg)
     $saved = isset($_GET['saved']) ? (string)$_GET['saved'] : '';
     $flash = array('site' => 'admin_flash_site', 'user' => 'admin_flash_user', 'pass' => 'admin_flash_pass',
                    'totp_on' => 'admin_flash_totp_on', 'totp_off' => 'admin_flash_totp_off',
-                   'cmt' => 'admin_flash_cmt');
+                   'cmt' => 'admin_flash_cmt', 'upd' => 'admin_flash_upd',
+                   'upd_ok' => 'admin_flash_upd_ok');
+    // 失败提示不能走绿色成功样式（upd_fail 是「检查失败」，用警示色）
+    $flashWarn = array('upd_fail' => 'admin_flash_upd_fail');
     if (isset($flash[$saved])) {
         $body .= '<div class="alert alert-ok">' . md_e(md_t($flash[$saved])) . '</div>';
+    } elseif (isset($flashWarn[$saved])) {
+        $body .= '<div class="alert alert-warn">' . md_e(md_t($flashWarn[$saved])) . '</div>';
     }
 
     // ---- 基本设置 + 白名单（一个表单） ----
@@ -3073,6 +3111,49 @@ function md_admin_settings($cfg)
         . '<pre class="admin-code">' . md_e($hardNginx) . '</pre>'
         . '</div></section>';
 
+    // ---- 新版本检查卡（v1.18.0）：随包休眠——勾选后才联网，出站面只有 GitHub Releases 一处 ----
+    $updOn = !empty($cfg['update_check']);
+    $updState = md_update_display($cfg);                // 开启时顺带过新鲜期；关闭/只读只读缓存
+    if ($updState['checked'] === 0) {
+        $updStatus = md_t('admin_upd_never');
+    } elseif (!$updState['ok'] || $updState['latest'] === '') {
+        $updStatus = md_t('admin_upd_failed');           // 含手工改坏缓存（ok=true 但无版本号）
+    } elseif (md_update_is_newer($updState['latest'], MD_VERSION)) {
+        $updStatus = md_t('admin_upd_found', array('v' => 'v' . $updState['latest']));
+    } else {
+        $updStatus = md_t('admin_upd_uptodate');
+    }
+    // 关闭开关时缓存不会自动刷新，久放的结果加一句「已过期」——不然半年前的结论会被当成现状
+    if ($updState['checked'] > 0 && !md_update_fresh($updState)) {
+        $updStatus .= md_t('admin_upd_stale');
+    }
+    $ep = md_update_endpoint();
+    $body .= '<section class="card"><div class="admin-card-head"><h2>' . md_e(md_t('admin_upd_title')) . '</h2></div>'
+        . '<div class="admin-card-body"><form method="post" action="' . md_e(md_admin_url('config')) . '">'
+        . md_csrf_field()
+        . '<input type="hidden" name="set_do" value="upd">'
+        . '<div class="admin-checks mb-2">'
+        . '<label><input type="checkbox" name="update_check" value="1"' . ($updOn ? ' checked' : '') . '>'
+        . md_e(md_t('admin_upd_on')) . '</label>'
+        . '</div>'
+        . '<p class="form-hint">' . md_t('admin_upd_hint') . '</p>'
+        . '<div class="admin-wrap"><table class="table admin-kv"><tbody>'
+        . '<tr><th>' . md_e(md_t('admin_upd_kv_current')) . '</th><td><code>' . md_e(MD_VERSION) . '</code></td></tr>'
+        . '<tr><th>' . md_e(md_t('admin_upd_kv_latest')) . '</th><td>' . md_e($updStatus) . '</td></tr>'
+        . '<tr><th>' . md_e(md_t('admin_upd_checked_at')) . '</th><td>'
+        . ($updState['checked'] > 0 ? md_e(date('Y-m-d H:i', $updState['checked'])) : '—') . '</td></tr>'
+        . '</tbody></table></div>'
+        . '<div class="admin-actions-row">'
+        . '<button class="btn btn-primary" type="submit">' . md_e(md_t('admin_save_settings')) . '</button>'
+        . (($updOn && !MD_READONLY)
+            ? '<button class="btn btn-ghost" type="submit" name="set_do" value="upd_now">'
+                . md_admin_ico('refresh') . md_e(md_t('admin_upd_now_btn')) . '</button>'
+            : '')
+        . '<a class="btn btn-ghost" href="' . md_e($ep['page']) . '" target="_blank" rel="noopener">'
+        . md_e(md_t('admin_upd_page_btn')) . '</a>'
+        . '</div>'
+        . '</form></div></section>';
+
     // ---- 修改账号 ----
     $body .= '<section class="card"><div class="admin-card-head"><h2>' . md_e(md_t('admin_user_card')) . '</h2></div>'
         . '<div class="admin-card-body"><form method="post" action="' . md_e(md_admin_url('config')) . '">'
@@ -3156,6 +3237,210 @@ function md_admin_settings($cfg)
 
     $body .= '</div>';
     md_admin_page(md_t('admin_nav_settings'), $body, 'config', $totpScripts);
+}
+
+// ---------------------------------------------------------------- 版本检查（v1.18.0）
+
+/**
+ * 新版本检查（默认关闭，后台显式开启后才联网）。
+ *
+ * 出站面只有一处：GET api.github.com/repos/<仓库>/releases/latest 读 tag_name
+ * （仓库取自 md_project_repo()），
+ * 请求头只有固定的 User-Agent 与 Accept，不带任何站点/用户数据，无查询串、无 cookie。
+ * 结果落 _dir/cache/update.json：成功 24 小时、失败 6 小时后才重试——每个安装每天至多
+ * 一次出站请求，其余都是本地文件读（这也是它敢在页面渲染期同步调用的原因）。
+ * 联网失败一律安静降级为「检查失败」，绝不阻断后台任何功能；纯内网部署保持关闭即可。
+ *
+ * 端点写死在程序里、不接受任何外部输入；「查看发行版」链接也由本地常量拼出，
+ * 不采用应答里的 url 字段——应答内容只用来取版本号，不参与任何输出。
+ */
+
+/**
+ * 检查目标（API / 人读的发行页）：仓库取自 md_project_repo()，全程序唯一出处。
+ * 两条地址都由本地常量拼出，不采用应答里的任何 url 字段。
+ */
+function md_update_endpoint()
+{
+    return array(
+        'api'  => 'https://api.github.com/repos/' . md_project_repo() . '/releases/latest',
+        'page' => md_project_url('releases/latest'),
+    );
+}
+
+/** 检查结果缓存文件；$base 供测试注入临时目录，线上恒走默认。 */
+function md_update_cache_file($base = null)
+{
+    return ($base === null ? MD_DIR . '/cache' : (string)$base) . '/update.json';
+}
+
+/** 读缓存：checked=0 表示从未检查过（与「检查失败」是两回事）。 */
+function md_update_state($base = null)
+{
+    $f = md_update_cache_file($base);
+    $d = is_file($f) ? json_decode((string)md_read_text($f), true) : null;
+    if (!is_array($d) || !isset($d['checked'])) {
+        return array('ok' => false, 'latest' => '', 'checked' => 0);
+    }
+    return array(
+        'ok'      => !empty($d['ok']),
+        'latest'  => isset($d['latest']) ? (string)$d['latest'] : '',
+        'checked' => (int)$d['checked'],
+    );
+}
+
+/** 写缓存（原子替换）：只存三样，应答原文绝不落盘。 */
+function md_update_save(array $state, $base = null)
+{
+    if (MD_READONLY) {
+        return false;
+    }
+    $dir = $base === null ? MD_DIR . '/cache' : (string)$base;
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0755, true);
+    }
+    return md_write_file($dir . '/update.json', json_encode(array(
+        'ok'      => !empty($state['ok']),
+        'latest'  => (string)$state['latest'],
+        'checked' => (int)$state['checked'],
+    )));
+}
+
+/** 解析 Release 应答（纯函数，可测）：取 tag_name 并只认 1.2 / 1.2.3 形态。
+ *  预发布（1.18.0-rc1）、草稿、异常应答一律返回空串——不把预发布当正式版提示。 */
+function md_update_parse($body)
+{
+    $d = json_decode((string)$body, true);
+    if (!is_array($d) || !isset($d['tag_name'])) {
+        return '';
+    }
+    if (preg_match('/^v?(\d+\.\d+(?:\.\d+)?)$/', trim((string)$d['tag_name']), $m) !== 1) {
+        return '';
+    }
+    return $m[1];
+}
+
+/** 版本比较（纯函数，可测）：$latest 是否严格新于 $current。
+ *  任何一边不是版本号（如测试期的 MD_VERSION='test'）都返回 false——不漏报也不误报。 */
+function md_update_is_newer($latest, $current)
+{
+    $re = '/^\d+(?:\.\d+){1,3}$/';
+    if (preg_match($re, (string)$latest) !== 1 || preg_match($re, (string)$current) !== 1) {
+        return false;
+    }
+    return version_compare((string)$latest, (string)$current, '>');
+}
+
+/**
+ * 出站 GET：curl 优先，缺失时回落 allow_url_fopen 流封装，两条通道都带超时上限。
+ * 只接受 HTTP 200；证书校验保持默认开启，4xx/5xx 与网络错误一律返回空串。
+ * $api 供测试指向本地桩服务，线上恒走 md_update_endpoint()。
+ */
+function md_update_fetch($api)
+{
+    $headers = array('Accept: application/vnd.github+json', 'User-Agent: DirDocs/' . MD_VERSION);
+    if (function_exists('curl_init')) {
+        $ch = curl_init((string)$api);
+        if ($ch === false) {
+            return '';
+        }
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 6);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);   // 默认即开，写出来防后人误关
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+        $body = curl_exec($ch);
+        $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        return ($body === false || $code !== 200) ? '' : (string)$body;
+    }
+    if (!ini_get('allow_url_fopen')) {
+        return '';                                      // 两条通道都没有：安静失败
+    }
+    $ctx = stream_context_create(array('http' => array(
+        'method'  => 'GET',
+        'header'  => implode("\r\n", $headers) . "\r\n",
+        'timeout' => 6,
+        // 保持默认的「状态码非 2xx 即失败」：4xx/5xx 的正文（含限流说明）不参与解析
+        'ignore_errors' => false,
+    )));
+    $body = @file_get_contents((string)$api, false, $ctx);
+    return $body === false ? '' : (string)$body;
+}
+
+/** 缓存是否仍在新鲜期内：成功 24h、失败 6h（失败也要退避，不然每次都白等一遍网络超时）。 */
+function md_update_fresh($state)
+{
+    if (!is_array($state) || $state['checked'] <= 0) {
+        return false;
+    }
+    return (time() - (int)$state['checked']) < (!empty($state['ok']) ? 86400 : 21600);
+}
+
+/**
+ * 检查并更新缓存。新鲜期内直接回缓存，$force 忽略新鲜期。
+ * 返回 array(ok, latest, checked)；ok=false 表示本次没取到版本号。
+ * $api / $base 供测试注入，线上恒走默认端点与 _dir/cache/。
+ */
+function md_update_check($force = false, $api = null, $base = null)
+{
+    $state = md_update_state($base);
+    if (!$force && md_update_fresh($state)) {
+        return $state;
+    }
+    $ep = md_update_endpoint();
+    $latest = md_update_parse(md_update_fetch($api === null ? $ep['api'] : (string)$api));
+    $new = array('ok' => $latest !== '', 'latest' => $latest, 'checked' => time());
+    md_update_save($new, $base);
+    return $new;
+}
+
+/**
+ * 页面调用入口（会过新鲜期、可能发一次出站请求）：未开启返回 null（连缓存都不读）；
+ * 只读模式只回显已存结果、绝不发请求。会话级节流是缓存写失败时的兜底——否则磁盘满 /
+ * 权限抖动会让后台每次加载都在网络超时上等一遍。
+ */
+function md_update_auto($cfg)
+{
+    if (empty($cfg['update_check'])) {
+        return null;
+    }
+    if (MD_READONLY) {
+        $s = md_update_state();
+        return $s['checked'] > 0 ? $s : null;
+    }
+    $now = time();
+    $gated = (session_status() === PHP_SESSION_ACTIVE) && isset($_SESSION['md_upd_gate']);
+    if ($gated && (int)$_SESSION['md_upd_gate'] > $now - 3600) {
+        return md_update_state();                       // 本会话一小时内已试过，不再联网
+    }
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        $_SESSION['md_upd_gate'] = $now;
+    }
+    return md_update_check();
+}
+
+/**
+ * 设置卡用状态：开启时走 md_update_auto（可能顺带刷新一次），关闭/只读时只读本地缓存。
+ * 显示与联网是两件事——不联网也把上次结果摆出来，由页面标注是否过期。
+ */
+function md_update_display($cfg)
+{
+    $auto = md_update_auto($cfg);
+    return is_array($auto) ? $auto : md_update_state();
+}
+
+/** 概览「程序版本」行的补充标记：仅在有更新版本时输出一枚可点徽标，其余情况空串。
+ *  $current 供测试注入（测试期 MD_VERSION 是 'test'，不参与版本比较）。 */
+function md_update_badge($state, $current = null)
+{
+    if (!is_array($state) || empty($state['ok']) || $state['latest'] === ''
+        || !md_update_is_newer($state['latest'], $current === null ? MD_VERSION : $current)) {
+        return '';
+    }
+    $ep = md_update_endpoint();
+    return ' <a class="badge admin-upd-badge" href="' . md_e($ep['page']) . '" target="_blank" rel="noopener">'
+        . md_e(md_t('admin_upd_new', array('v' => 'v' . $state['latest']))) . '</a>';
 }
 
 // ---------------------------------------------------------------- 分发
