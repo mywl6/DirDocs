@@ -1366,6 +1366,9 @@ function md_config_defaults()
         // 新版本检查（v1.18.0，随包休眠）：false = 不发任何出站请求。站长在后台显式
         // 开启后才会访问 api.github.com 取 Release 号（详见 md_admin.php 版本检查节）
         'update_check'  => false,
+        // MCP API 令牌（v1.20.0）：array(id => array(name/hash/scope/created/last))。
+        // hash 是 password_hash 哈希，明文只在后台生成时展示一次；空数组 = 端点全拒（401）
+        'mcp_tokens'    => array(),
         // 邮件通知（随包休眠）：smtp_host 留空 = 不发任何信、零外联。secure 取值
         // ''（STARTTLS 自动升级）/ 'ssl'（隐式 TLS，常配 465）/ 'none'（仅内网中继）
         'smtp_host'     => '',
@@ -1416,6 +1419,9 @@ function md_config_load()
     }
     // 版本检查（v1.18.0）：配置写坏（字符串/数组）一律按「关」处理——只认真值布尔
     $cfg['update_check'] = !empty($cfg['update_check']);
+    // MCP API 令牌（v1.20.0）：只保形态合法的记录（归一在 md_mcp.php，本文件先于它加载，
+    // 函数调用发生在运行时，与 theme_options 同一先例）
+    $cfg['mcp_tokens'] = md_mcp_tokens_normalize(isset($cfg['mcp_tokens']) ? $cfg['mcp_tokens'] : array());
     foreach (array('smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'smtp_from', 'smtp_secure', 'notify_email') as $k) {
         if (!isset($cfg[$k]) || !is_string($cfg[$k])) {
             $cfg[$k] = md_config_defaults()[$k];

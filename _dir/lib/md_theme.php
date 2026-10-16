@@ -1005,6 +1005,14 @@ function md_page($ctx)
     // RSS/Atom 订阅发现（v1.13.0）：?a=rss 与路由模式无关，两种模式下都走查询串
     $meta .= '<link rel="alternate" type="application/atom+xml" title="' . md_e($siteTitle)
         . '" href="?a=rss">' . "\n";
+    // 站点图标（默认内置）：SVG 现代浏览器优先 + ICO 兜底 + iOS 添加主屏。
+    // 与 RSS 同走查询串（两种路由模式一致）；资产通道长缓存，URL 带程序版本号
+    $meta .= '<link rel="icon" type="image/svg+xml" href="'
+        . md_e(md_url_for('img/favicon.svg', 'sys', $cfg) . '&v=' . MD_VERSION) . "\">\n"
+        . '<link rel="icon" type="image/x-icon" href="'
+        . md_e(md_url_for('img/favicon.ico', 'sys', $cfg) . '&v=' . MD_VERSION) . "\">\n"
+        . '<link rel="apple-touch-icon" href="'
+        . md_e(md_url_for('img/apple-touch-icon.png', 'sys', $cfg) . '&v=' . MD_VERSION) . "\">\n";
     // 生成器声明（v1.18.0）：页面不可见，给源码查看者与自动化工具一条溯源线索；
     // 站外地址只作为标识出现，不是资源引用，CSP / 零外联策略都不受影响
     $meta .= '<meta name="generator" content="DirDocs ' . md_e(MD_VERSION) . ' (' . md_e(md_project_url()) . ')">' . "\n";

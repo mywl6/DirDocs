@@ -705,6 +705,11 @@ function md_send_sys_asset($f)
         'theme-init.js'                      => 'application/javascript; charset=utf-8',
         'admin.css'                          => 'text/css; charset=utf-8',
         'admin.js'                           => 'application/javascript; charset=utf-8',
+        'img/favicon.svg'                    => 'image/svg+xml',
+        'img/favicon.ico'                    => 'image/x-icon',
+        'img/apple-touch-icon.png'           => 'image/png',
+        'img/icon-192.png'                   => 'image/png',
+        'img/icon-512.png'                   => 'image/png',
         'vendor/bootstrap.min.css'           => 'text/css; charset=utf-8',
         'vendor/bootstrap.bundle.min.js'     => 'application/javascript; charset=utf-8',
         'vendor/bootstrap-icons.min.css'     => 'text/css; charset=utf-8',
@@ -831,7 +836,8 @@ function md_config_set($patch)
                    'show_attach', 'order_prefix', 'admin_pass', 'admin_user', 'admin_totp',
                    'base_path', 'site_url', 'risk_ignore',
                    'comments', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass',
-                   'smtp_from', 'smtp_secure', 'notify_email', 'update_check', 'theme_options');
+                   'smtp_from', 'smtp_secure', 'notify_email', 'update_check',
+                   'theme_options', 'mcp_tokens');
     $cfg = md_config_load();
     foreach ($patch as $k => $v) {
         if (in_array($k, $allow, true)) {
@@ -979,6 +985,7 @@ function md_admin_ico($name)
         'refresh' => 'arrow-clockwise',
         'github'  => 'github',
         'palette' => 'palette',
+        'key'     => 'key',
     );
     if (!isset($icons[$name])) {
         return '';
@@ -1018,6 +1025,7 @@ function md_admin_nav_items()
         'docs'     => array('admin_nav_docs', 'doc'),
         'comments' => array('admin_nav_comments', 'chat'),
         'attach'   => array('admin_nav_attach', 'image'),
+        'mcp'      => array('admin_nav_mcp', 'key'),
         'cache'    => array('admin_nav_cache', 'db'),
         'theme'    => array('admin_nav_theme', 'palette'),
         'config'   => array('admin_nav_settings', 'gear'),
@@ -1056,6 +1064,10 @@ function md_admin_html_head($title, $cfg)
     return '<!DOCTYPE html><html lang="' . md_e(md_lang_current()) . '"' . md_i18n_js_attr() . ' data-bs-theme="light"><head><meta charset="utf-8">'
         . '<meta name="viewport" content="width=device-width,initial-scale=1">'
         . '<title>' . md_e($title) . md_e(md_t('admin_title_suffix')) . '</title>'
+        // 站点图标（默认内置）：SVG 优先 + ICO 兜底 + iOS 主屏；资产通道长缓存，URL 带版本号
+        . '<link rel="icon" type="image/svg+xml" href="' . md_e(md_url_for('img/favicon.svg', 'sys', $cfg) . '&v=' . $v) . '">'
+        . '<link rel="icon" type="image/x-icon" href="' . md_e(md_url_for('img/favicon.ico', 'sys', $cfg) . '&v=' . $v) . '">'
+        . '<link rel="apple-touch-icon" href="' . md_e(md_url_for('img/apple-touch-icon.png', 'sys', $cfg) . '&v=' . $v) . '">'
         . '<script src="' . md_e(md_url_for('theme-init.js', 'sys', $cfg) . '&v=' . $v) . '"></script>'
         . '<link rel="stylesheet" href="' . md_e($cdn['css']) . '">'
         . '<link rel="stylesheet" href="' . md_e($cdn['icons']) . '">'
@@ -1604,6 +1616,74 @@ function md_admin_docs_flat($tree, $cfg)
  * - 标题非空 → 合并/生成 front-matter title（md_admin_title_save）；
  * - 提交带 ajax=1 时返回 JSON（供 admin.js 渐进增强），否则照旧 302 回跳（PRG 兜底）。
  */
+/**
+ * 文档写入唯一入口（v1.20.0 自后台编辑器抽取；MCP write_doc 走同一条路径，不开旁路）。
+ * front-matter 闭合校验、路径/扩展名白名单、已有文档解析或新文档的父目录与文件名
+ * 安全比对、覆盖前修订归档（20 版）、原子写、缓存失效都在这一处。
+ * $createDir=true（仅 MCP）：父目录不存在时逐段安全校验后自动创建。
+ * 返回 array(true, 相对路径) 或 array(false, 已本地化的错误消息)。
+ */
+function md_doc_save($rel, $content, $cfg, $createDir = false)
+{
+    $rel = str_replace('\\', '/', trim((string)$rel, '/'));
+    // front-matter 简单校验：有开头 --- 就必须有闭合 ---，否则整篇会被当成正文
+    if ((md_starts_with($content, "---\n") || md_starts_with($content, "---\r\n"))
+        && preg_match('/\A---\r?\n.*?\r?\n---\r?\n/s', $content) !== 1) {
+        return array(false, md_t('admin_err_fm_unclosed'));
+    }
+    if (md_resolve_path_only($rel) === false) {
+        return array(false, md_t('admin_err_path_bad'));
+    }
+    if (!in_array(md_ext($rel), $cfg['ext_md'], true)) {
+        return array(false, md_t('admin_err_ext', array('list' => implode(' / ', $cfg['ext_md']))));
+    }
+    $abs = md_resolve($rel, $cfg, 'md');
+    if ($abs === false) {
+        // 已有文档解析失败 → 按新文件处理：父目录必须存在（或可安全创建），文件名必须合法
+        $dirPart = dirname($rel);
+        $dirPart = ($dirPart === '.' || $dirPart === '/') ? '' : $dirPart;
+        $base = basename($rel);
+        $safe = md_safe_name($base);
+        if ($dirPart !== '' && !is_dir(MD_ROOT . '/' . $dirPart)) {
+            if ($createDir) {
+                $ok = true;
+                $made = '';
+                foreach (explode('/', $dirPart) as $seg) {   // 逐段过文件名安全白名单再建
+                    if (md_safe_dirname($seg) === false) {
+                        $ok = false;
+                        break;
+                    }
+                    $made .= ($made === '' ? '' : '/') . $seg;
+                    if (!is_dir(MD_ROOT . '/' . $made) && !@mkdir(MD_ROOT . '/' . $made, 0755)) {
+                        $ok = false;
+                        break;
+                    }
+                }
+                if (!$ok) {
+                    return array(false, md_t('admin_err_parent_missing'));
+                }
+            } else {
+                return array(false, md_t('admin_err_parent_missing'));
+            }
+        }
+        if ($safe === false || $safe !== $base) {
+            return array(false, md_t('admin_err_badname', array('name' => md_e($base))));
+        }
+        $abs = MD_ROOT . '/' . $rel;
+    }
+    if (is_file($abs)) {
+        $histOld = md_read_text($abs);
+        if (is_string($histOld) && $histOld !== $content) {
+            md_history_archive($rel, $histOld);         // 覆盖保存前归档当前内容（v1.14.0）
+        }
+    }
+    if (!md_write_file($abs, $content)) {
+        return array(false, md_t('admin_err_save_fail'));
+    }
+    md_tree_cache_clear();
+    return array(true, $rel);
+}
+
 function md_admin_doc_edit($cfg)
 {
     md_admin_guard();
@@ -1650,54 +1730,17 @@ function md_admin_doc_edit($cfg)
         }
         $content = md_admin_title_save($content, $title);
 
-        $err = '';
-        // front-matter 简单校验：有开头 --- 就必须有闭合 ---，否则整篇会被当成正文
-        if ((md_starts_with($content, "---\n") || md_starts_with($content, "---\r\n"))
-            && preg_match('/\A---\r?\n.*?\r?\n---\r?\n/s', $content) !== 1) {
-            $err = md_t('admin_err_fm_unclosed');
-        }
-        if ($err === '') {
-            $pathOk = md_resolve_path_only($rel);
-            if ($pathOk === false) {
-                $err = md_t('admin_err_path_bad');
-            } elseif (!in_array(md_ext($rel), $cfg['ext_md'], true)) {
-                $err = md_t('admin_err_ext', array('list' => implode(' / ', $cfg['ext_md'])));
-            } else {
-                $abs = md_resolve($rel, $cfg, 'md');
-                if ($abs === false) {
-                    // 已有文档解析失败 → 按新文件处理：父目录必须存在，文件名必须合法
-                    $dirPart = dirname($rel);
-                    $dirPart = ($dirPart === '.' || $dirPart === '/') ? '' : $dirPart;
-                    $base = basename($rel);
-                    $safe = md_safe_name($base);
-                    if ($dirPart !== '' && !is_dir(MD_ROOT . '/' . $dirPart)) {
-                        $err = md_t('admin_err_parent_missing');
-                    } elseif ($safe === false || $safe !== $base) {
-                        $err = md_t('admin_err_badname', array('name' => md_e($base)));
-                    } else {
-                        $abs = MD_ROOT . '/' . $rel;
-                    }
-                }
-                if ($err === '') {
-                    if (is_file($abs)) {
-                        $histOld = md_read_text($abs);
-                        if (is_string($histOld) && $histOld !== $content) {
-                            md_history_archive($rel, $histOld);   // 覆盖保存前归档当前内容（v1.14.0）
-                        }
-                    }
-                    if (md_write_file($abs, $content)) {
-                        md_tree_cache_clear();
-                        if ($ajax) {
-                            md_admin_json(array('ok' => 1, 'msg' => md_t('admin_saved'), 'rel' => $rel,
-                                'edit' => md_admin_url('edit', array('f' => $rel))));
-                        }
-                        header('Location: ' . md_admin_url('edit', array('f' => $rel, 'saved' => '1')));
-                        exit;
-                    }
-                    $err = md_t('admin_err_save_fail');
-                }
+        // 校验与落盘统一走 md_doc_save（MCP write_doc 与此同一条路径）
+        $r = md_doc_save($rel, $content, $cfg);
+        if ($r[0]) {
+            if ($ajax) {
+                md_admin_json(array('ok' => 1, 'msg' => md_t('admin_saved'), 'rel' => $r[1],
+                    'edit' => md_admin_url('edit', array('f' => $r[1]))));
             }
+            header('Location: ' . md_admin_url('edit', array('f' => $r[1], 'saved' => '1')));
+            exit;
         }
+        $err = $r[1];
         // 保存失败：AJAX 走 JSON，普通表单重显表单（保留用户已填内容）
         if ($ajax) {
             md_admin_json(array('ok' => 0, 'msg' => trim(strip_tags($err))));
@@ -3771,6 +3814,9 @@ function md_admin_dispatch($cfg)
             break;
         case 'attachdel':
             md_admin_attach_delete($cfg);
+            break;
+        case 'mcp':
+            md_admin_mcp($cfg);                         // API 令牌（MCP）页，实现在 md_mcp.php
             break;
         case 'cache':
             md_admin_cache($cfg);

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 96 96" role="img" aria-label="DirDocs 标志图形">
+  <!-- DirDocs 品牌图形（master）：蓝渐变文件夹 + 白色 .md 文档。
+       与 banner.svg 同一图形语言；应用图标（tile 版）见 icon.svg -->
+  <defs>
+    <linearGradient id="accent" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4a90f4"/>
+      <stop offset="1" stop-color="#2563d6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 文档（从文件夹口探出，M↓ 即 Markdown） -->
+  <rect x="31" y="8" width="38" height="58" rx="5.5" fill="#ffffff" stroke="#bcd2f0" stroke-width="2"/>
+  <g fill="none" stroke="#2563d6" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="37,16 37,28 44,21.5 51,28 51,16"/>
+    <line x1="58.5" y1="16" x2="58.5" y2="27"/>
+    <polyline points="54,22.5 58.5,28 63,22.5"/>
+  </g>
+
+  <!-- 文件夹后壁（斜角标签页） -->
+  <path d="M14 42c0-4.4 3.6-8 8-8h15c2.3 0 4.5 1 6 2.8l4.2 4.9c1.5 1.8 3.8 2.8 6.2 2.8H74c4.4 0 8 3.6 8 8v22.1c0 4.4-3.6 8-8 8H22c-4.4 0-8-3.6-8-8V42z"
+        fill="url(#accent)"/>
+  <!-- 文件夹前壁（压住文档下半） -->
+  <path d="M14 52h68v22.6c0 4.4-3.6 8-8 8H22c-4.4 0-8-3.6-8-8V52z" fill="#2f6bde"/>
+  <path d="M14 57v-1.5c0-1.9 1.6-3.5 3.5-3.5h61c1.9 0 3.5 1.6 3.5 3.5V57z" fill="#ffffff" opacity="0.14"/>
+</svg>

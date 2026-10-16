@@ -4,6 +4,52 @@ DirDocs 对外可见的变更，按版本倒序记录，格式参照
 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。同一版本内按
 **新增 / 变更 / 修复 / 安全** 分组。
 
+## v1.20.0 - 2026-10-16
+
+### 新增
+
+- **MCP 端点（`?a=mcp`）**：内置 Model Context Protocol 服务，Claude Code、Cursor 等
+  支持 MCP 的 AI 客户端凭令牌直接「读站点、写文档」。JSON-RPC 2.0，Streamable HTTP
+  传输的无状态形态（不建会话、不开 SSE，纯 JSON 一问一答，官方客户端均可直连）。
+  五个工具：`list_docs`（文档树含草稿标记）/ `read_doc` / `search_docs`（与 Ctrl+K
+  同一引擎，草稿不入索引）/ `write_doc`（默认落 `draft: true`，前台导航/搜索/RSS
+  不可见，后台审阅后发布；缺失父目录自动创建）/ `get_site_info`。协议版本
+  `2025-06-18`，未知方法 `-32601`，未知工具 `-32602`，解析错误 `-32700`，
+  通知回 202。实现零依赖（PHP 内置函数即可，无 composer）
+- **后台「API 令牌」页**（导航第五项）：生成/吊销令牌（备注名 + 只读/读写 scope）、
+  一键复制的客户端配置示例、最近使用时间、调用日志（最近 20 条）。令牌只存
+  `password_hash` 哈希，明文仅在生成时展示一次；上限 20 个；存于 `_dir/config.php`
+  的 `mcp_tokens` 键（与口令哈希/TOTP 同一张表，删除对应条目即找回路径）
+- **文档写入唯一入口 `md_doc_save()`**：自后台编辑器抽取（校验/修订归档/原子写/
+  缓存失效一处收口），后台「文档管理」与 MCP `write_doc` 从此共用同一条保存路径，
+  API 不构成绕过既有安全检查的旁路；MCP 场景额外支持缺失父目录逐段校验后自动创建
+
+### 安全
+
+- **MCP 端点红线**（README「安全设计」同步）：认证前置——无 Bearer 令牌一律 401、
+  不进入协议处理；scope 分离——只读令牌调写工具直接被拒；HTTPS 闸门——公网明文
+  http 一律 403（本机/局域网放行；反代 TLS 终止场景以站长配置的 https:// `site_url`
+  为权威信号，不采信可伪造的 `X-Forwarded-Proto`，与 v1.6.0 canonical 决策同一红线）；
+  双维限流——按令牌+IP 读 600 次/时、写 60 次/时，超限 429 带 `Retry-After`；
+  写操作留痕——`cache/mcp-log.jsonl` 记时间/令牌/工具/路径/结果，不含正文，
+  后台可查；体积闸——单请求 ≤ 2MB、单文档 ≤ 1MB；错误文案走 `md_t()` 中英双语
+
+### 变更
+
+- 后台导航与文件角色说明同步：模块由五个变六个（新增 `md_mcp.php`，
+  随升级覆盖 `_dir/lib/` 即可启用）；`?a=mcp` 在搜索页拦截之前分发（沿用 v1.15.1 教训）
+- upload_media 工具本期不做：价值最低而攻击面新增最明显，且 SVG 上传需与
+  Sec-Fetch-Dest 策略重新对账（v1.11.0 定案）
+
+- **品牌图形与站点图标**：正式 logo 体系落地（沿 banner.svg 的「蓝渐变文件夹 +
+  .md 文档」图形语言）——横排锁定版 `logo.svg` / `logo-dark.svg`、纯图形
+  `logo-mark.svg`、应用图标 `icon.svg`（在 `.github/assets/`）；GitHub 社交卡
+  `social-preview.png`（1280×640，仓库 Settings → Social preview 手动上传）
+- **站点图标开箱即用**：`_dir/assets/img/` 内置 `favicon.svg`（现代浏览器）+
+  `favicon.ico`（16/32/48）+ `apple-touch-icon.png`（iOS 添加主屏），前台与后台
+  `<head>` 自动输出，URL 带程序版本号（资产通道长缓存，升级即换新）；另有
+  `icon-192/512.png` 备用图标，`_sys` 资产白名单登记全部五个图标文件的 MIME
+
 ## v1.19.0 - 2026-10-16
 
 ### 新增

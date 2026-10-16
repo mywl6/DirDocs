@@ -51,6 +51,10 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
 - **AI 反复重写有后悔药**：在线编辑每次覆盖保存自动留修订版本（每篇最近 20 版），
   可预览、对比、一键恢复；没定稿的先标 `draft: true`，导航/搜索/订阅/sitemap
   全部隐身，后台仍可预览
+- **异地 AI 直写**：内置 MCP 端点（`?a=mcp`，JSON-RPC 2.0）——Claude Code、Cursor 等
+  任何支持 MCP 的 AI 客户端填一段配置就能列出/读取/搜索站点文档，并把 AI 生成的页面
+  直接写入：默认存为草稿等站长审阅，覆盖自动留修订版本；令牌分只读/读写、按哈希存储、
+  双维限流，后台「API 令牌」页生成（机制见下文「安全设计」）
 - **过时的文档自己浮上来**：每篇底部「这篇文档有帮助吗」匿名投票，聚合计数汇入后台，
   「需改进」多的排前排——就是下一批让 AI 重写的清单（IP 只以哈希进当日限流记账，
   不存原文；只读部署自动隐藏投票胶囊）
@@ -118,15 +122,17 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
 
 浏览器打开 **`http://你的域名/index.php?a=admin`**（或点任一页面右下角的"后台"链接）。
 
-首次进入先设定管理员密码（至少 8 位），之后用密码登录。后台做六件事：
+首次进入先设定管理员密码（至少 8 位），之后用密码登录。后台做七件事：
 
 1. **站点设置**——标题、副标题、界面语言、路由模式、白名单后缀、改密码
 2. **主题**——风格包与显示模式，以及当前主题声明的**主题选项**（见下）
 3. **文档管理**——在线编辑/新建 Markdown（大编辑请用本地编辑器，网页编辑用于救急）；
    覆盖保存自动留修订版本（每篇最近 20 版），后台可预览、对比、一键恢复
 4. **附件上传**——上传到指定目录，白名单后缀（图片/pdf/zip/mp4…）
-5. **缓存管理**——重建/清除索引，查看最近更新
-6. **评论管理**——访客评论先审后显：待审清单、批准、删除
+5. **API 令牌（MCP）**——生成/吊销 AI 客户端的访问令牌（只读 / 读写），一键复制
+   客户端配置示例，查看调用日志
+6. **缓存管理**——重建/清除索引，查看最近更新
+7. **评论管理**——访客评论先审后显：待审清单、批准、删除
 
 设置页还有一张**新版本检查**卡（默认关闭）：开启后后台每天至多查一次 GitHub Releases，
 有新版时概览的「程序版本」行旁出现一枚可点徽标。检查结果缓存在 `_dir/cache/update.json`，
@@ -175,7 +181,7 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
 | 路径 | 角色 | 升级时 |
 |---|---|---|
 | `index.php` | 入口：boot + 加载 + 路由分发（版本号读取也在这） | 极少变，随包覆盖即可 |
-| `_dir/lib/` | 业务代码（engine/i18n/pages/theme/admin 五模块）、版本号 `version.php`、`lang/` 语言包、内置主题权威副本 `builtin-themes/` | 覆盖 |
+| `_dir/lib/` | 业务代码（engine/i18n/pages/theme/admin/mcp 六模块）、版本号 `version.php`、`lang/` 语言包、内置主题权威副本 `builtin-themes/` | 覆盖 |
 | `_dir/assets/` | 内置 CSS/脚本 + 自托管三方库（`vendor/`：Bootstrap/图标/mermaid/qrcode） | 覆盖 |
 | `_dir/config.php` | 你的站点配置 | 不动 |
 | `_dir/cache/` | 索引缓存（可随时删） | 不动 |
@@ -217,6 +223,14 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
   可选 TOTP 两步验证（RFC 6238 纯 PHP 实现，设置页扫码/手输密钥绑定，
   动态码失败与密码共用锁定节奏，会话内防重放；验证器丢失时删除
   `_dir/config.php` 的 `admin_totp` 一行即可复位）。
+- **MCP API 令牌**（`?a=mcp`，默认无令牌 = 端点全拒 401）：Bearer 令牌仅存
+  `password_hash` 哈希，明文只在后台生成时展示一次；只读/读写 scope 分离，只读令牌
+  调写工具直接被拒；写入与后台编辑走同一条保存路径（front-matter 校验 + 路径/扩展名
+  白名单 + 符号链接拒绝 + 原子写），且默认落草稿；公网明文 http 调用被 403 拒绝
+  （本机/局域网放行；反代 TLS 终止请在设置里配 https:// 站点地址——
+  可伪造的 `X-Forwarded-Proto` 不采信）；按令牌+IP 双维限流（读 600 次/时、
+  写 60 次/时，超限 429）；写操作留痕 `cache/mcp-log.jsonl`（时间/令牌/工具/路径，
+  不含正文）；单请求 ≤ 2MB、单文档 ≤ 1MB。
 - **CSP**：每页下发 `Content-Security-Policy`（`default-src 'self'`、
   `script-src 'self'`、`form-action 'self'`、`base-uri 'self'`）。
   全资源自托管后策略是纯本站，不放行任何第三方域；
@@ -279,6 +293,12 @@ into the folder, it is already in the knowledge base.
   (last 20 per doc) with preview, diff and one-click restore; mark unfinished work
   `draft: true` and it vanishes from nav/search/feed/sitemap while staying previewable
   in the admin
+- **Remote AI writes**: a built-in MCP endpoint (`?a=mcp`, JSON-RPC 2.0) — MCP-capable
+  clients like Claude Code or Cursor list/read/search the site's docs and write
+  AI-generated pages straight in with one config block: everything lands as a draft
+  for the owner to review, overwrites keep revisions automatically; tokens split
+  read-only vs read-write, are stored hashed and rate-limited on two axes
+  (create them on the admin "API tokens" page — see ["Security design"](#security-design))
 - **Stale docs surface themselves**: an anonymous "was this helpful?" vote sits at the
   bottom of every doc; aggregates flow into the admin, and the most-downvoted docs float
   to the top — that list is exactly what the AI should rewrite next (IPs enter the daily
@@ -362,7 +382,7 @@ everything else is unaffected; the admin overview flags the missing file. Put it
 Open **`http://yourdomain/index.php?a=admin`** in a browser (or the "Admin" link in the
 bottom corner of any page).
 
-The first visit sets the admin password (at least 8 characters). The admin does six
+The first visit sets the admin password (at least 8 characters). The admin does seven
 things:
 
 1. **Site settings** — title, subtitle, UI language, URL mode, allowed extensions,
@@ -374,8 +394,10 @@ things:
    per doc) with preview, diff and one-click restore
 4. **Uploads** — upload attachments to a chosen directory, whitelist extensions
    (images/pdf/zip/mp4…)
-5. **Cache** — rebuild/clear indexes, view recent updates
-6. **Comments** — visitor comments are held for approval: pending list, approve, delete
+5. **API tokens (MCP)** — create/revoke tokens for AI clients (read-only or
+   read-write), copy-ready client config, activity log
+6. **Cache** — rebuild/clear indexes, view recent updates
+7. **Comments** — visitor comments are held for approval: pending list, approve, delete
 
 Settings also carries an **Update check** card (off by default): once enabled the admin
 queries GitHub Releases at most once a day, and a clickable badge appears next to "App
@@ -390,7 +412,7 @@ Five failed logins lock the account for 10 minutes.
 | Path | Role | On upgrade |
 |---|---|---|
 | `index.php` | Entry: boot + load + route | rarely changes |
-| `_dir/lib/` | Business code (engine/i18n/pages/theme/admin) + `version.php` + `lang/` packs + built-in theme sources `builtin-themes/` | overwrite |
+| `_dir/lib/` | Business code (engine/i18n/pages/theme/admin/mcp) + `version.php` + `lang/` packs + built-in theme sources `builtin-themes/` | overwrite |
 | `_dir/assets/` | Built-in CSS/JS + self-hosted vendor libs (Bootstrap/icons/mermaid/qrcode) | overwrite |
 | `_dir/config.php` | Your site config | untouched |
 | `_dir/cache/` | Index cache (safe to delete) | untouched |
@@ -443,6 +465,17 @@ Every mechanism is listed in the open — verify each against the source:
   QR or manual secret on the settings page; failed TOTP codes share the password lockout
   cadence with in-session replay protection; lost authenticator? delete the `admin_totp`
   line in `_dir/config.php` to reset).
+- **MCP API tokens** (`?a=mcp`; with no token created the endpoint answers 401 to
+  everything): Bearer tokens are stored as `password_hash` hashes only — the plaintext
+  is shown exactly once at creation; read-only and read-write scopes are separated, and
+  read-only tokens are refused by write tools; writes go through the exact same save
+  path as the admin editor (front-matter validation + path/extension whitelists +
+  symlink rejection + atomic write) and default to drafts; plain HTTP from the public
+  internet is rejected with 403 (localhost/LAN is allowed; behind a TLS-terminating
+  proxy set an https:// site address in Settings — the forgeable `X-Forwarded-Proto`
+  is never trusted); rate limiting is per token+IP (600 reads/hour, 60 writes/hour,
+  429 when exceeded); every write lands in `cache/mcp-log.jsonl` (time/token/tool/path,
+  never document content); request bodies cap at 2MB and documents at 1MB.
 - **CSP**: every page ships a `Content-Security-Policy` (`default-src 'self'`,
   `script-src 'self'`, `form-action 'self'`, `base-uri 'self'`). With everything
   self-hosted the policy is purely same-origin — no third-party domain is allowed;

@@ -7,7 +7,7 @@
  *
  * 本文件只做三件事：
  *   1. boot：定义常量（MD_VERSION / MD_ROOT / MD_DIR / MD_BOOT / MD_READONLY）
- *   2. load：加载 _dir/lib/ 下的五个模块（带 MD_BOOT 闸门）
+ *   2. load：加载 _dir/lib/ 下的六个模块（带 MD_BOOT 闸门）
  *   3. route：按 action/query 分发到各模块的入口函数
  *
  * 业务代码全在 _dir/lib/：
@@ -16,8 +16,10 @@
  *   md_pages.php   前台（页面动作/模板辅助/附件/风险检测）
  *   md_theme.php   主题（CSS 变量/页面模板/用户主题）
  *   md_admin.php   后台（鉴权/界面/多页/分发）
+ *   md_mcp.php     MCP API（?a=mcp JSON-RPC 端点/令牌/限流/日志）
  * 版本号数据文件：_dir/lib/version.php（随 lib 覆盖升级；本文件里的串只是兜底）。
  * 内置样式与行为脚本在 _dir/assets/（builtin.css / builtin.js / theme-init.js，后台另有 admin.css / admin.js），
+ * 站点图标（favicon/apple-touch-icon/app icon）在 _dir/assets/img/，
  * 三方前端库（Bootstrap/图标/mermaid/qrcode）自托管在 _dir/assets/vendor/，运行时零外部请求。
  * 语言包在 _dir/lib/lang/（内置，随升级覆盖）。
  *
@@ -39,7 +41,7 @@ define('MD_BOOT', 1);
  * 本文件里的串只作兜底。版本号必须落在升级会覆盖的位置——否则只更新 lib/ 的安装
  * 永远停在旧版本号上，新版本检查会一直提示「有新版」而升级后依旧。
  */
-$md_version = '1.19.0';
+$md_version = '1.20.0';
 $md_verfile = __DIR__ . '/_dir/lib/version.php';
 if (is_file($md_verfile)) {
     $md_v = @include $md_verfile;
@@ -85,7 +87,8 @@ if (function_exists('mb_language')) { mb_language('uni'); }
 
 // ---------------------------------------------------------------- load
 
-$md_libs = array('md_engine.php', 'md_i18n.php', 'md_pages.php', 'md_theme.php', 'md_admin.php');
+$md_libs = array('md_engine.php', 'md_i18n.php', 'md_pages.php', 'md_theme.php', 'md_admin.php',
+                 'md_mcp.php');
 foreach ($md_libs as $lib) {
     $path = MD_LIB . '/' . $lib;
     if (!is_file($path)) {
@@ -128,6 +131,12 @@ if ($action === 'sitemap') {
 // 订阅：?a=rss 动态输出 Atom 源（最近更新的 20 篇，树缓存 + lastmod 构建）
 if ($action === 'rss') {
     md_send_rss($MD_CFG);
+}
+
+// MCP API（v1.20.0）：POST ?a=mcp JSON-RPC 2.0（Streamable HTTP 无状态形态），认证/HTTPS/
+// 限流闸门在 md_mcp_endpoint 内部。与 feedback 同批：抢在搜索页拦截之前分发
+if ($action === 'mcp') {
+    md_mcp_endpoint($MD_CFG);
 }
 
 $p = md_route_p();

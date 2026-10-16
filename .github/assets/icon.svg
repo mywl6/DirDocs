@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="DirDocs 应用图标">
+  <!-- DirDocs 应用图标（tile master）：蓝渐变圆角底 + 白色文件夹文档图形。
+       运行时副本：_dir/assets/img/favicon.svg；PNG/ICO 由本文件光栅化 -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4a90f4"/>
+      <stop offset="1" stop-color="#2563d6"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="115" fill="url(#tile)"/>
+
+  <g transform="translate(256 262) scale(4.2) translate(-48 -45.3)">
+    <!-- 文档（白色，M↓ 用底色蓝保持「镂空」观感） -->
+    <rect x="31" y="8" width="38" height="58" rx="5.5" fill="#ffffff"/>
+    <g fill="none" stroke="#2563d6" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="37,16 37,28 44,21.5 51,28 51,16"/>
+      <line x1="58.5" y1="16" x2="58.5" y2="27"/>
+      <polyline points="54,22.5 58.5,28 63,22.5"/>
+    </g>
+    <!-- 文件夹后壁（深一档蓝，读作「内胆」） -->
+    <path d="M14 42c0-4.4 3.6-8 8-8h15c2.3 0 4.5 1 6 2.8l4.2 4.9c1.5 1.8 3.8 2.8 6.2 2.8H74c4.4 0 8 3.6 8 8v22.1c0 4.4-3.6 8-8 8H22c-4.4 0-8-3.6-8-8V42z"
+          fill="#1e50b0"/>
+    <!-- 文件夹前壁 -->
+    <path d="M14 52h68v22.6c0 4.4-3.6 8-8 8H22c-4.4 0-8-3.6-8-8V52z" fill="#ffffff"/>
+  </g>
+</svg>
