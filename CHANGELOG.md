@@ -4,6 +4,15 @@ DirDocs 对外可见的变更，按版本倒序记录，格式参照
 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。同一版本内按
 **新增 / 变更 / 修复 / 安全** 分组。
 
+## v1.21.1 - 2026-10-17
+
+### 修复
+
+- **MCP `tools/list` 对严格客户端返回非法 schema**：`get_site_info` 的
+  `inputSchema.properties` 为空 PHP 数组时被编码成 JSON 数组（`[]`），
+  按 JSON Schema 校验 `properties` 必须为对象的客户端（如部分严格 MCP SDK）
+  会拒收整个 `tools/list` 应答。已强制编码为 `{}`（与 `ping` 空结果同款处理）。
+
 ## v1.21.0 - 2026-10-16
 
 ### 新增

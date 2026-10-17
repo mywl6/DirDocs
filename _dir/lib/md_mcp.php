@@ -541,7 +541,9 @@ function md_mcp_tools()
                 . "and the current token's scope. Call this first to learn about the site.",
             'inputSchema' => array(
                 'type' => 'object',
-                'properties' => array(),
+                // 空 properties 必须 cast 成 object：空 PHP 数组会编码成 []，
+                // 客户端按 JSON Schema 校验 properties 为 record 时会拒收（ping 同款坑）
+                'properties' => (object)array(),
                 'additionalProperties' => false,
             ),
         ),
