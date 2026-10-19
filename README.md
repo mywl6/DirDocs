@@ -112,9 +112,11 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
 
 放在 Web 根目录 = 整个根都是文档；放在 `/docs/` 子目录 = 那一层就是文档站。
 
-**升级**：用新版本的 `_dir/lib/` 与 `_dir/assets/` 覆盖旧的两个目录即可
-（程序版本号在 `_dir/lib/version.php`，随 lib 一起更新，`index.php` 通常不用动——
-它只在路由调整时随版更新）。你的数据（`_dir/config.php`、`_dir/cache/`）不会被覆盖。
+**升级**：下载 Release 里的 `DirDocs-<版本>-update.zip`（覆盖升级包），把包内
+`index.php`、`_dir/lib/`、`_dir/assets/` 覆盖到安装目录即可——包内不含任何用户数据
+（`_dir/config.php`、`_dir/cache/`、自建主题、你的文档与附件），覆盖不会动它们。
+也可以手工只覆盖 `_dir/lib/` 与 `_dir/assets/`（程序版本号在 `_dir/lib/version.php`，
+随 lib 一起更新；`index.php` 通常不用动，它只在路由调整时随版更新）。
 
 `_dir/themes/` 里只有**你自己建的主题**，升级时一个都不用动。内置的 default / wiki
 不需要你操心：它们的权威副本随 `_dir/lib/` 一起升级（放在 `_dir/lib/builtin-themes/`），
@@ -385,10 +387,12 @@ your-dir/
 
 At the web root, the whole root is the docs; under `/docs/`, that level is the site.
 
-**Upgrading**: overwrite the old `_dir/lib/` and `_dir/assets/` with the new versions
-(the version number lives in `_dir/lib/version.php` and travels with `lib/`; `index.php`
-only changes when routing changes). Your data (`_dir/config.php`, `_dir/cache/`) is never
-overwritten.
+**Upgrading**: grab `DirDocs-<version>-update.zip` from the Release (the overwrite package)
+and copy its `index.php`, `_dir/lib/` and `_dir/assets/` over your install — the package
+contains no user data (`_dir/config.php`, `_dir/cache/`, your own themes, docs and
+attachments), so nothing of yours is touched. You can also overwrite just `_dir/lib/` and
+`_dir/assets/` by hand (the version number lives in `_dir/lib/version.php` and travels with
+`lib/`; `index.php` only changes when routing changes).
 
 `_dir/themes/` holds **only themes you created yourself** — upgrading never touches them.
 The built-in `default` / `wiki` need no attention from you: their authoritative copies ship

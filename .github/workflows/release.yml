@@ -25,14 +25,26 @@ jobs:
           [ -s /tmp/section.md ] || echo "详见 [CHANGELOG.md](CHANGELOG.md)。" > /tmp/section.md
           cat .github/release-header.md /tmp/section.md > release_notes.md
 
-      - name: 打包并创建 Release
+      - name: 打包（完整安装包 + 覆盖升级包）
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          # 完整安装包：首次部署用（含示例文档说明与许可证）
+          git archive --format=zip --prefix="DirDocs-$VERSION/" \
+            -o "DirDocs-${GITHUB_REF_NAME}.zip" \
+            "$GITHUB_REF_NAME" -- index.php _dir README.md CHANGELOG.md LICENSE
+          # 覆盖升级包：只含随版本覆盖的运行时文件（index.php + _dir/lib + _dir/assets）。
+          # 用户数据（_dir/config.php、_dir/cache/、_dir/themes/、文档与附件）一律不在包内；
+          # 内置主题权威副本在 _dir/lib/builtin-themes/，随 lib 升级，不需要手工覆盖 themes/。
+          git archive --format=zip --prefix="DirDocs-$VERSION-update/" \
+            -o "DirDocs-${GITHUB_REF_NAME}-update.zip" \
+            "$GITHUB_REF_NAME" -- index.php _dir/lib _dir/assets LICENSE
+
+      - name: 创建 Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          git archive --format=zip --prefix="DirDocs-${GITHUB_REF_NAME#v}/" \
-            -o "DirDocs-${GITHUB_REF_NAME}.zip" \
-            "$GITHUB_REF_NAME" -- index.php _dir README.md CHANGELOG.md LICENSE
           gh release create "$GITHUB_REF_NAME" \
             "DirDocs-${GITHUB_REF_NAME}.zip" \
+            "DirDocs-${GITHUB_REF_NAME}-update.zip" \
             --title "DirDocs $GITHUB_REF_NAME" \
             --notes-file release_notes.md
