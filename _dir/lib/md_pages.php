@@ -104,7 +104,8 @@ function md_tree_tag_html($rel, $mtime)
     $base = basename($rel);
     $dot = strrpos($base, '.');
     $stem = $dot !== false ? substr($base, 0, $dot) : $base;
-    if (in_array($stem, array('README', 'readme', 'index', 'home', '首页'), true)) {
+    $ap = md_alias_parse($stem);                        // {{别名}} 不参与首页/README 判定
+    if (in_array($ap['name'], array('README', 'readme', 'index', 'home', '首页'), true)) {
         return '<span class="tree-tag">' . md_e(md_t('tree_tag_home')) . '</span>';
     }
     if ($mtime > 0 && (time() - $mtime) <= 604800) {
@@ -140,7 +141,8 @@ function md_is_dir_index_name($rel)
     $base = basename($rel);
     $dot = strrpos($base, '.');
     $stem = $dot !== false ? substr($base, 0, $dot) : $base;
-    return in_array($stem, array('README', 'readme', 'index', 'home', '首页', '说明'), true);
+    $ap = md_alias_parse($stem);                        // README{{home}}.md 仍是目录索引文档
+    return in_array($ap['name'], array('README', 'readme', 'index', 'home', '首页', '说明'), true);
 }
 
 /** 规范地址（相对 URL）：根目录页在 simple 模式下用「/」形态而非丑陋的 ?p=。 */
@@ -293,7 +295,15 @@ function md_title_of($rel)
     if (isset($cache[$rel])) {
         return $cache[$rel];
     }
-    $title = basename($rel);
+    // 回退名：去后缀 + 去 {{别名}}（别名是地址，不进标题/面包屑）
+    $base = basename($rel);
+    $cfg = md_config_load();
+    $ext = md_ext($base);
+    if ($ext !== '' && in_array($ext, $cfg['ext_md'], true)) {
+        $base = substr($base, 0, -(strlen($ext) + 1));
+    }
+    $apName = md_alias_parse($base);
+    $title = $apName['name'];
     $treeMd = isset($GLOBALS['md_tree']['md']) ? $GLOBALS['md_tree']['md'] : array();
     $hit = false;
     if (isset($treeMd[$rel])) {
@@ -301,7 +311,7 @@ function md_title_of($rel)
     } else {
         // doc 路由的 $rel 不带后缀，树键带后缀：补白名单后缀再查一次，
         // 否则 front-matter/H1 标题在面包屑和 <title> 里永远不生效
-        foreach (md_config_load()['ext_md'] as $e) {
+        foreach ($cfg['ext_md'] as $e) {
             if (isset($treeMd[$rel . '.' . $e])) {
                 $hit = $treeMd[$rel . '.' . $e];
                 break;
@@ -317,7 +327,7 @@ function md_title_of($rel)
         $text = md_read_text($abs);
         if ($text === false) {
             // 无后缀形态也补一次直读
-            foreach (md_config_load()['ext_md'] as $e) {
+            foreach ($cfg['ext_md'] as $e) {
                 $text = md_read_text(MD_ROOT . '/' . $rel . '.' . $e);
                 if ($text !== false) {
                     break;
@@ -343,15 +353,17 @@ function md_title_of($rel)
 /**
  * 导航/目录列表里的文档显示名：front-matter/H1 标题优先；
  * 没有标题（md_title_of 回退为文件名）时按 01- 前缀剥除呈现，
- * 让「01-简介.md」在无标题时显示成「简介」。
+ * 让「01-简介.md」在无标题时显示成「简介」。{{别名}} 永远不进显示名。
  */
 function md_doc_label($rel, $cfg)
 {
+    $stem = basename($rel, '.' . md_ext($rel));
+    $plain = md_display_name($stem, $cfg);
     $title = md_title_of($rel);
-    if ($title !== '' && $title !== basename($rel)) {
+    if ($title !== '' && $title !== $plain && $title !== md_alias_parse($stem)['name']) {
         return $title;
     }
-    return md_display_name(basename($rel, '.' . md_ext($rel)), $cfg);
+    return $plain;
 }
 
 /** 目录列表的小图标（内联 SVG，自托管，跟随 currentColor）。 */
@@ -452,7 +464,8 @@ function md_home_doc_rel($children, $cfg, $useHomeCfg = true)
     }
     foreach (array('README', 'readme', 'index', 'home', '首页', '说明') as $name) {
         foreach (isset($children['md']) ? $children['md'] : array() as $m) {
-            if (basename($m['rel'], '.' . md_ext($m['rel'])) === $name) {
+            $ap = md_alias_parse(basename($m['rel'], '.' . md_ext($m['rel'])));
+            if ($ap['name'] === $name) {
                 return $m['rel'];
             }
         }
@@ -555,10 +568,14 @@ function md_show_search($tree, $cfg)
             $url = md_url_for(md_strip_doc_ext($r['rel'], $cfg), 'doc', $cfg);
             // 结果链接带 q，打开后正文高亮
             $url .= (strpos($url, '?') !== false ? '&' : '?') . 'q=' . rawurlencode($q);
+            $shownPath = md_alias_url($r['rel'], 'doc', $cfg);
+            if ($shownPath === false) {
+                $shownPath = $r['rel'];
+            }
             $html .= '<li><h3><a href="' . md_e($url) . '">'
                 . md_search_highlight(md_e($r['title']), $q) . '</a></h3>'
                 . '<p class="md-snippet">' . md_search_highlight(md_e($r['snippet']), $q) . '</p>'
-                . '<p class="md-path">' . md_e($r['rel']) . '</p></li>';
+                . '<p class="md-path">' . md_e($shownPath) . '</p></li>';
         }
         $html .= '</ul>';
     }
@@ -643,9 +660,13 @@ function md_show_recent($tree, $cfg)
             }
             $url = md_url_for(md_strip_doc_ext($rel, $cfg), 'doc', $cfg);
             $mtime = (int)$info['mtime'];
+            $shownPath = md_alias_url($rel, 'doc', $cfg);
+            if ($shownPath === false) {
+                $shownPath = $rel;
+            }
             $html .= '<li><span class="md-rdate">' . md_e(date('Y-m-d H:i', $mtime)) . '</span>'
                 . '<a href="' . md_e($url) . '">' . md_e(md_title_of($rel)) . '</a>'
-                . '<span class="md-rpath">' . md_e($rel) . '</span></li>';
+                . '<span class="md-rpath">' . md_e($shownPath) . '</span></li>';
             $shown++;
             if ($shown >= $limit) {
                 break;
@@ -660,7 +681,77 @@ function md_show_recent($tree, $cfg)
     md_page($ctx);
 }
 
-function md_dir_list_html($children, $cfg)
+/**
+ * 整页 404（v1.22.0）：走主题模板，保留顶栏搜索、侧边栏目录树与「最近更新」，
+ * 让走错地址的访客还有路可走（旧版只有一行「页面不存在」，等于把入口关死）。
+ *
+ * 只用于前台文档路由；附件通道（?a=file）与后台/资产通道的 404 仍走 md_abort 的
+ * 极简页——那些场景不该把整站导航回吐给探测者。
+ * 状态码必须在 md_page() 之前设置：模板只负责渲染，不再改响应码。
+ */
+function md_show_404($tree, $cfg, $reqPath = '')
+{
+    http_response_code(404);
+
+    $ctx = array();
+    $ctx['cfg'] = $cfg;
+    $ctx['page_title'] = '404';
+    $ctx['breadcrumbs'] = md_render_breadcrumbs('', $cfg, '404');
+    $ctx['nav_html'] = md_render_nav($tree, $cfg, '');
+    $ctx['toc_html'] = '';
+    $ctx['risk_html'] = md_risk_html(md_exec_risk_files(MD_ROOT, $cfg), md_is_admin());
+    $ctx['seo_robots'] = 'noindex, follow';             // 404 不进索引，但仍允许跟随站内链接
+    $ctx['seo_type'] = 'website';
+
+    $html = '<h1>404</h1>'
+        . '<p class="md-lead">' . md_e(md_t('err_404')) . '</p>';
+    $reqPath = trim(str_replace('\\', '/', (string)$reqPath), '/');
+    if ($reqPath !== '') {
+        $html .= '<p class="md-hint">' . md_e(md_t('err_404_path', array('path' => $reqPath))) . '</p>';
+    }
+    // 站内搜索：移动端侧栏收在抽屉里，正文里的搜索框是 404 页最直接的出路
+    $html .= '<form class="md-searchbox md-404-search input-group" role="search" method="get" action="'
+        . md_e(md_url_for('', 'search', $cfg)) . '">'
+        . '<span class="input-group-text md-search-ico"><i class="bi bi-search" aria-hidden="true"></i></span>'
+        . '<input type="search" class="form-control" name="q" placeholder="' . md_e(md_t('search_ph')) . '"'
+        . ' aria-label="' . md_e(md_t('search_aria')) . '">'
+        . '<button class="btn btn-primary" type="submit">' . md_e(md_t('search_page_title')) . '</button>'
+        . '</form>'
+        . '<p class="md-hint">' . md_e(md_t('err_404_tip')) . '</p>';
+
+    // 最近更新的 6 篇：从侧栏之外再给一条「马上能读点什么」的路
+    $items = isset($tree['md']) ? $tree['md'] : array();
+    uasort($items, function ($a, $b) {
+        return (int)$b['mtime'] - (int)$a['mtime'];
+    });
+    $recent = '';
+    $n = 0;
+    foreach ($items as $rel => $info) {
+        if (!empty($info['draft']) || md_is_dir_index_name($rel)) {
+            continue;
+        }
+        $recent .= '<li><span class="md-rdate">' . md_e(md_rel_time((int)$info['mtime'])) . '</span>'
+            . '<a href="' . md_e(md_url_for(md_strip_doc_ext($rel, $cfg), 'doc', $cfg)) . '">'
+            . md_e(md_title_of($rel)) . '</a></li>';
+        $n++;
+        if ($n >= 6) {
+            break;
+        }
+    }
+    if ($recent !== '') {
+        $html .= '<section class="md-404-recent"><h2>' . md_e(md_t('recent_title')) . '</h2>'
+            . '<ul class="md-recent">' . $recent . '</ul></section>';
+    }
+
+    $html .= '<p class="md-404-acts">'
+        . '<a class="btn btn-primary rounded-3" href="' . md_e(md_url_for('', 'dir', $cfg)) . '">'
+        . '<i class="bi bi-house-door" aria-hidden="true"></i>' . md_e(md_t('back_home')) . '</a>'
+        . '<a class="btn btn-outline-primary rounded-3" href="' . md_e(md_url_for('', 'recent', $cfg)) . '">'
+        . '<i class="bi bi-clock-history" aria-hidden="true"></i>' . md_e(md_t('recent_title')) . '</a>'
+        . '</p>';
+    $ctx['content_html'] = $html;
+    md_page($ctx);
+}function md_dir_list_html($children, $cfg)
 {
     if (!$children['dir'] && !$children['md']) {
         return '<p class="md-empty"><em>' . md_e(md_t('dir_empty')) . '</em></p>';
@@ -673,10 +764,12 @@ function md_dir_list_html($children, $cfg)
             . '<span class="md-meta">' . md_e(md_t('dir_meta')) . '</span></li>';
     }
     foreach ($children['md'] as $m) {
+        $stem = basename($m['rel'], '.' . md_ext($m['rel']));
+        $fileName = md_alias_parse($stem)['name'] . '.' . md_ext($m['rel']);
         $html .= '<li><span class="md-ico">' . md_ico_file() . '</span><a href="'
             . md_e(md_url_for(md_strip_doc_ext($m['rel'], $cfg), 'doc', $cfg)) . '">'
             . md_e(md_doc_label($m['rel'], $cfg)) . '</a><span class="md-meta">'
-            . md_e(basename($m['rel'])) . '</span></li>';
+            . md_e($fileName) . '</span></li>';
     }
     $html .= '</ul>';
     return $html;
@@ -745,15 +838,16 @@ function md_show_doc($docRel, $tree, $cfg, $forceDirRel = null)
 {
     $abs = md_resolve($docRel, $cfg, 'md');
     if ($abs === false) {
-        md_abort(404);
+        md_show_404($tree, $cfg, $docRel);
     }
     $text = md_read_text($abs);
     if ($text === false) {
-        md_abort(404);
+        md_show_404($tree, $cfg, $docRel);
     }
     $meta = md_front_matter($text);
     if (!empty($meta['draft']) && !md_is_admin()) {
-        md_abort(404);                              // 草稿对访客不可见；管理员登录态可预览（v1.15.0）
+        // 草稿对访客不可见；管理员登录态可预览（v1.15.0）。404 用整页模板，别把访客堵死
+        md_show_404($tree, $cfg, $docRel);
     }
     $body = md_strip_front_matter($text);
     $r = md_render($body, $cfg);

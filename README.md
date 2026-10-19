@@ -48,6 +48,11 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
 
 - **零改造接入**：AI 常写的 front matter 直接生效——`title` 定标题、`order` 定顺序、
   `draft: true` 藏草稿；`01-`、`02-` 数字前缀排序也认识
+- **URL 别名**：文件名末尾加 `{{别名}}` 就换了访问地址——`快速开始{{getting-started}}.md`
+  的地址是 `/getting-started`，导航里仍显示「快速开始」，加别名前的原名地址继续有效；
+  目录同理（`指南{{guide}}/` → `/guide/`，内部文档地址一起跟着走）。后台文档列表显示
+  别名徽标，同地址被多个文件占用时会给出冲突提示。**不写 `{{别名}}` 就没有别名**，
+  访问地址与显示名都还是原文件名，行为与旧版完全一致
 - **AI 夹带的 HTML 也能渲染**：README 常见的 `<div align="center">`、`<details>`
   折叠块、`<kbd>`、`<sub>` 等原生标签净化后直接生效（后台关闭/标准/宽松三档；
   `script`、`iframe`、内联事件等危险标签任何档位都不放行）——AI 输出里常见的
@@ -70,7 +75,8 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
 - **机器同样可读**：`?a=rss` 订阅最近 20 篇更新，`?a=sitemap` 全站清单；
   文档本体永远是目录里的纯文件，编辑器、脚本、AI 工具随时直接读写
 - **找得到**：前台 `Ctrl+K` 呼出全站搜索弹窗；最近更新页支持按月浏览
-  （`?a=recent&ym=2026-10`，只在有更新的月份之间切换）
+  （`?a=recent&ym=2026-10`，只在有更新的月份之间切换）；走错地址也不会断路——
+  404 页保留顶栏搜索、侧边栏目录树与最近更新入口
 
 ## 技术底座
 
@@ -297,6 +303,13 @@ into the folder, it is already in the knowledge base.
 - **Zero-adaptation intake**: the front matter AI already writes just works —
   `title` sets the heading, `order` sets the position, `draft: true` hides the page;
   `01-` / `02-` numeric prefixes sort too
+- **URL aliases**: append `{{alias}}` to a file name to change its address —
+  `quick-start{{getting-started}}.md` is served at `/getting-started` while the nav
+  still shows “quick-start”, and the pre-alias name URL keeps working. Folders work
+  the same way (`guides{{guide}}/` → `/guide/`, and every document inside follows).
+  The admin document list shows alias badges and warns when one address is claimed
+  by several files. **No `{{alias}}` means no alias** — both the address and the
+  display name stay exactly the original file name, unchanged from previous releases
 - **HTML that AI mixes in renders too**: raw tags common in READMEs —
   `<div align="center">`, `<details>` collapsibles, `<kbd>`, `<sub>` — render
   sanitized (off / standard / loose modes in the admin; `script`, `iframe` and
@@ -330,7 +343,8 @@ into the folder, it is already in the knowledge base.
   tools read and write them directly at any time
 - **Findable**: `Ctrl+K` summons a site-wide search palette; the recent-updates page is
   browsable by month (`?a=recent&ym=2026-10`, switching only between months that have
-  updates)
+  updates); a wrong address no longer dead-ends — the 404 page keeps the top-bar
+  search, the sidebar tree and recent-update links
 
 ## The plain foundation
 

@@ -963,3 +963,10 @@ mark{background:var(--mark-bg);color:var(--accent);padding:1px 4px;border-radius
   background:var(--accent-weak);border-radius:999px;padding:3px 10px;justify-self:start}
 .md-cmt-hp{position:absolute!important;left:-9999px!important;width:1px;height:1px;overflow:hidden}
 .md-cmt-empty{color:var(--text2);font-size:14px;padding:10px 0}
+
+/* 404 整页（v1.22.0）：主题布局 + 正文搜索 / 最近更新 / 操作按钮 */
+.md-404-search{width:auto;max-width:34em;margin:1.1em 0 .4em}
+.md-404-search .form-control{border-radius:0}
+.md-404-search .btn{border-radius:0 8px 8px 0}
+.md-404-recent{margin-top:1.4em}
+.md-404-acts{display:flex;flex-wrap:wrap;gap:.6em;margin-top:1.2em}

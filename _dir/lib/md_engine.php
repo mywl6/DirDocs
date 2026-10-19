@@ -166,6 +166,172 @@ function md_url_encode($rel)
     return implode('/', $out);
 }
 
+/**
+ * 别名索引（请求内缓存，v1.22.0）：真实路径 ⇄ 访问地址（URL 路径段）两张映射。
+ *
+ * 目录/文档的地址段：有 {{别名}} 用别名，没有就用原名（目录名 / 去后缀文件名）。
+ * 父目录的别名会传播到子项地址——`指南{{guide}}/01-简介{{intro}}.md` 的地址是
+ * `guide/intro`。attach 不参与（附件始终走 ?a=file&p=<真实路径> 通道）。
+ *
+ * 树未加载（纯函数测试、后台早期页面）时返回 null，md_url_for 按原路径输出，
+ * 与引入别名前的行为完全一致。
+ */
+function md_alias_index($tree = null, $cfg = null)
+{
+    if (isset($GLOBALS['md_alias_index'])) {
+        return $GLOBALS['md_alias_index'];
+    }
+    if ($tree === null) {
+        $tree = isset($GLOBALS['md_tree']) ? $GLOBALS['md_tree'] : null;
+    }
+    if (!is_array($tree)) {
+        return null;
+    }
+    if ($cfg === null) {
+        $cfg = md_config_load();
+    }
+    $idx = array('doc' => array(), 'dir' => array(),
+                 'rdoc' => array(), 'rdir' => array(), 'conflict' => array());
+    md_alias_index_build($tree, $cfg, $idx);
+    $GLOBALS['md_alias_index'] = $idx;
+    return $idx;
+}
+
+/**
+ * 构建别名索引（扁平一遍，按路径深度处理，父目录地址先就位）。每个真实项登记两条地址：
+ *   1. 规范地址（canonical）：逐段用别名，没有别名用原名；
+ *   2. 原名地址（plain）：逐段剥掉别名、保留数字前缀——加别名之前的旧链接继续有效。
+ * 两条地址都可以解析回真实路径；路由先查真实文件/目录，所以不会发生别名劫持。
+ */
+function md_alias_index_build($tree, $cfg, &$idx)
+{
+    $dirs = isset($tree['dir']) && is_array($tree['dir']) ? $tree['dir'] : array();
+    $keys = array_keys($dirs);
+    usort($keys, function ($a, $b) {
+        $d = substr_count($a, '/') - substr_count($b, '/');
+        return $d !== 0 ? $d : md_str_compare($a, $b);
+    });
+    foreach ($keys as $rel) {
+        $d = $dirs[$rel];
+        if (!is_array($d)) {
+            continue;
+        }
+        $parentRel = dirname($rel);
+        if ($parentRel === '.' || $parentRel === '/') {
+            $parentRel = '';
+        }
+        $urlDir = isset($idx['dir'][$parentRel]) ? $idx['dir'][$parentRel] : '';
+        $plainDir = isset($idx['pdir'][$parentRel]) ? $idx['pdir'][$parentRel] : '';
+        $name = isset($d['name']) ? (string)$d['name'] : basename($rel);
+        $ap = md_alias_parse($name);
+        $alias = isset($d['alias']) ? (string)$d['alias'] : $ap['alias'];
+        // 别名为空 = 没有别名：地址段就是目录名本身，下面只登记这一条地址
+        $canonUrl = ($urlDir === '' ? '' : $urlDir . '/') . ($alias !== '' ? $alias : $name);
+        $plainUrl = ($plainDir === '' ? '' : $plainDir . '/') . $ap['name'];
+        $idx['dir'][$rel] = $canonUrl;
+        $idx['pdir'][$rel] = $plainUrl;
+        md_alias_claim($idx, 'rdir', $canonUrl, $rel);
+        if ($plainUrl !== $canonUrl) {
+            md_alias_claim($idx, 'rdir', $plainUrl, $rel);
+        }
+    }
+
+    $docs = isset($tree['md']) && is_array($tree['md']) ? $tree['md'] : array();
+    ksort($docs);
+    foreach ($docs as $rel => $m) {
+        if (!is_array($m)) {
+            continue;
+        }
+        $docRel = md_strip_doc_ext($rel, $cfg);
+        $parentRel = dirname($docRel);
+        if ($parentRel === '.' || $parentRel === '/') {
+            $parentRel = '';
+        }
+        if ($parentRel !== '' && !isset($idx['dir'][$parentRel])) {
+            continue;                                   // 父目录没进树（异常索引）：不给它编造根级地址
+        }
+        $urlDir = isset($idx['dir'][$parentRel]) ? $idx['dir'][$parentRel] : '';
+        $plainDir = isset($idx['pdir'][$parentRel]) ? $idx['pdir'][$parentRel] : '';
+        $stem = basename($docRel);
+        $ap = md_alias_parse($stem);
+        $alias = isset($m['alias']) ? (string)$m['alias'] : $ap['alias'];
+        // 别名为空 = 没有别名：地址段就是文件名本身（含 01- 前缀），不多登记任何别名条目
+        $canonUrl = ($urlDir === '' ? '' : $urlDir . '/') . ($alias !== '' ? $alias : $stem);
+        $plainUrl = ($plainDir === '' ? '' : $plainDir . '/') . $ap['name'];
+        $idx['doc'][$docRel] = $canonUrl;
+        md_alias_claim($idx, 'rdoc', $canonUrl, $docRel);
+        if ($plainUrl !== $canonUrl) {
+            md_alias_claim($idx, 'rdoc', $plainUrl, $docRel);
+        }
+    }
+}
+
+/** 登记反向映射；同一地址被两个真实路径占用时记进 conflict（后台警示用，路由取先登记的）。 */
+function md_alias_claim(&$idx, $key, $url, $rel)
+{
+    $other = null;
+    if (isset($idx['rdoc'][$url]) && $idx['rdoc'][$url] !== $rel) {
+        $other = $idx['rdoc'][$url];
+    } elseif (isset($idx['rdir'][$url]) && $idx['rdir'][$url] !== $rel) {
+        $other = $idx['rdir'][$url];
+    }
+    if ($other !== null) {
+        if (!isset($idx['conflict'][$url])) {
+            $idx['conflict'][$url] = array($other);
+        }
+        if (!in_array($rel, $idx['conflict'][$url], true)) {
+            $idx['conflict'][$url][] = $rel;
+        }
+    }
+    if (!isset($idx[$key][$url])) {
+        $idx[$key][$url] = $rel;
+    }
+}
+
+/** 真实路径 → 访问地址（未命中/无树时返回 false，调用方回落原路径）。 */
+function md_alias_url($rel, $type, $cfg)
+{
+    $idx = md_alias_index(null, $cfg);
+    if (!is_array($idx) || ($type !== 'doc' && $type !== 'dir')) {
+        return false;
+    }
+    $rel = trim(str_replace('\\', '/', (string)$rel), '/');
+    if ($rel === '' || $rel === '_dir' || md_starts_with($rel, '_dir/')) {
+        return false;
+    }
+    if ($type === 'doc') {
+        $rel = md_strip_doc_ext($rel, $cfg);
+    }
+    return isset($idx[$type][$rel]) ? $idx[$type][$rel] : false;
+}
+
+/** 访问地址 → 真实路径：array('type'=>'doc'|'dir', 'rel'=>真实相对路径) 或 false。 */
+function md_alias_resolve($url, $cfg)
+{
+    $idx = md_alias_index(null, $cfg);
+    if (!is_array($idx)) {
+        return false;
+    }
+    $url = trim(str_replace('\\', '/', (string)$url), '/');
+    if ($url === '') {
+        return false;
+    }
+    if (isset($idx['rdoc'][$url])) {
+        return array('type' => 'doc', 'rel' => $idx['rdoc'][$url]);
+    }
+    if (isset($idx['rdir'][$url])) {
+        return array('type' => 'dir', 'rel' => $idx['rdir'][$url]);
+    }
+    return false;
+}
+
+/** 别名冲突清单（地址 => 占用该地址的真实路径数组）；后台「文档管理」用来警示。 */
+function md_alias_conflicts($tree, $cfg)
+{
+    $idx = md_alias_index($tree, $cfg);
+    return is_array($idx) && !empty($idx['conflict']) ? $idx['conflict'] : array();
+}
+
 function md_url_for($rel, $type = 'doc', $cfg = null)
 {
     static $cfgStatic = null;
@@ -176,6 +342,14 @@ function md_url_for($rel, $type = 'doc', $cfg = null)
         $cfg = $cfgStatic;
     }
     $base = md_base_path($cfg);
+    // 别名地址（v1.22.0）：文档/目录的真实路径先换成 {{别名}} 映射出的访问地址；
+    // 树未加载或未登记时保持原路径，行为与旧版一致。
+    if (($type === 'doc' || $type === 'dir') && $rel !== '') {
+        $mapped = md_alias_url($rel, $type, $cfg);
+        if ($mapped !== false) {
+            $rel = $mapped;
+        }
+    }
     $enc = md_url_encode($rel);
 
     if ($cfg['url_mode'] === 'pretty' && $base !== false) {
@@ -337,14 +511,69 @@ function md_split_order_prefix($name)
     return array(null, $name);
 }
 
-/** 导航/列表显示名：order_prefix 开启时剥掉数字前缀。 */
+/**
+ * 文件名别名解析（v1.22.0）：名称末尾的 `{{别名}}` 是该文档/目录的访问地址（URL slug），
+ * 文件名本身仍是显示名（导航/面包屑/后台列表仍按文件名与标题呈现）。
+ *
+ * 入参必须是单段名称：目录传完整目录名，文档传去掉 .md 后缀的文件名。
+ * 返回 array('name'=>显示名部分, 'alias'=>别名或空串, 'bad'=>形态是否非法)。
+ * 形态非法（{{}} 未闭合、空别名、别名含非法字符）时 name 原样返回、alias 为空——
+ * 扫描/前台按普通文件名处理（不因一个坏名字让整站出错），后台保存通道另行拒绝。
+ */
+function md_alias_parse($name)
+{
+    $name = (string)$name;
+    if (preg_match('/^(.*)\{\{([^{}]*)\}\}$/u', $name, $m) === 1) {
+        $alias = trim($m[2]);
+        if ($m[1] === '' || !md_alias_valid($alias)) {
+            return array('name' => $name, 'alias' => '', 'bad' => true);
+        }
+        return array('name' => $m[1], 'alias' => $alias, 'bad' => false);
+    }
+    if (strpos($name, '{{') !== false || strpos($name, '}}') !== false) {
+        return array('name' => $name, 'alias' => '', 'bad' => true);
+    }
+    return array('name' => $name, 'alias' => '', 'bad' => false);
+}
+
+/**
+ * 别名合法性：字母/数字/-/_，可含中日韩文字；长度 ≤64。
+ * 刻意不放行空格、点、斜杠与标点——别名要进 URL 的路径段，白名单能同时挡住
+ * 穿越片段（. / ..）、百分号解码歧义与「别名后缀恰好是 .md 被路由剥掉」的坑。
+ */
+function md_alias_valid($alias)
+{
+    $alias = (string)$alias;
+    if ($alias === '' || $alias === '.' || $alias === '..' || strlen($alias) > 64) {
+        return false;
+    }
+    return preg_match('/^[A-Za-z0-9_\-' . '\x{4e00}-\x{9fa5}\x{3040}-\x{30ff}\x{ac00}-\x{d7af}' . ']+$/u',
+        $alias) === 1;
+}
+
+/**
+ * 导航/列表显示名：先剥掉文件名末尾的 {{别名}}（别名是地址，不是名字），
+ * order_prefix 开启时再剥数字前缀。
+ */
 function md_display_name($name, $cfg)
 {
+    $ap = md_alias_parse($name);
+    $name = $ap['name'];
     if (empty($cfg['order_prefix'])) {
         return $name;
     }
     $r = md_split_order_prefix($name);
     return $r[0] === null ? $name : $r[1];
+}
+
+/**
+ * 路径里单个文件名/目录名的别名校验（后台保存通道用）：返回 false 表示
+ * {{别名}} 写法非法。没有别名（或根本不含花括号）一律通过。
+ */
+function md_alias_name_ok($name)
+{
+    $ap = md_alias_parse($name);
+    return empty($ap['bad']);
 }
 
 function md_scan($dir, $cfg, $prefix = '', &$out = array())
@@ -375,8 +604,10 @@ function md_scan($dir, $cfg, $prefix = '', &$out = array())
         }
         $rel = $prefix === '' ? $name : $prefix . '/' . $name;
         if (is_dir($full)) {
-            $p = !empty($cfg['order_prefix']) ? md_split_order_prefix($name) : array(null, $name);
-            $out['dir'][$rel] = array('name' => $name, 'rel' => $rel, 'mtime' => @filemtime($full), 'sort' => $p[0]);
+            $ap = md_alias_parse($name);                // {{别名}} 是访问地址段，不是名字
+            $p = !empty($cfg['order_prefix']) ? md_split_order_prefix($ap['name']) : array(null, $ap['name']);
+            $out['dir'][$rel] = array('name' => $name, 'label' => $ap['name'], 'alias' => $ap['alias'],
+                                      'rel' => $rel, 'mtime' => @filemtime($full), 'sort' => $p[0]);
             md_scan($full, $cfg, $rel, $out);
         } else {
             $ext = md_ext($name);
@@ -394,7 +625,11 @@ function md_scan($dir, $cfg, $prefix = '', &$out = array())
                 'size'  => @filesize($full),
             );
             if ($type === 'md') {
-                $meta = md_scan_head_meta($full, $name, $cfg);
+                $stem = $ext !== '' ? substr($name, 0, -(strlen($ext) + 1)) : $name;
+                $ap = md_alias_parse($stem);
+                $item['label'] = $ap['name'];
+                $item['alias'] = $ap['alias'];
+                $meta = md_scan_head_meta($full, $ap['name'], $cfg);
                 $item['title'] = $meta['title'];
                 $item['order'] = $meta['order'];
                 $item['sort']   = $meta['sort'];
@@ -494,7 +729,8 @@ function md_sort_items(&$items, $cfg = null)
                 return $sa < $sb ? -1 : 1;
             }
         }
-        return md_str_compare($a['name'], $b['name']);
+        return md_str_compare(isset($a['label']) ? $a['label'] : $a['name'],
+            isset($b['label']) ? $b['label'] : $b['name']);
     });
     return $items;
 }
@@ -1106,8 +1342,8 @@ function md_safe_name($name)
     if (strlen($name) > 128) {
         return false;
     }
-    // 只保留安全字符集：字母数字中文点下划线连字符空格括号
-    if (preg_match('/^[A-Za-z0-9._\-\s\x{4e00}-\x{9fa5}\x{3040}-\x{30ff}\x{ac00}-\x{d7af}()\[\]（）【】#&+@,;=~\'"!%]+$/u', $name) !== 1) {
+    // 只保留安全字符集：字母数字中文点下划线连字符空格括号花括号（花括号供 {{别名}} 用）
+    if (preg_match('/^[A-Za-z0-9._\-\s\x{4e00}-\x{9fa5}\x{3040}-\x{30ff}\x{ac00}-\x{d7af}()\[\]（）【】{}#&+@,;=~\'"!%]+$/u', $name) !== 1) {
         return false;
     }
     return $name;
@@ -1137,8 +1373,16 @@ function md_unique_name($dir, $name)
         $base = substr($name, 0, $dot);
         $ext = substr($name, $dot);
     }
+    // {{别名}} 必须留在文件名末尾：序号插在别名之前（x{{a}}.md → x 1{{a}}.md）
+    $ap = md_alias_parse($base);
+    $stem = $ap['name'];
+    $tail = $ap['alias'] !== '' ? '{{' . $ap['alias'] . '}}' : '';
+    if ($ap['bad']) {
+        $stem = $base;
+        $tail = '';
+    }
     for ($i = 1; $i < 1000; $i++) {
-        $cand = $base . ' ' . $i . $ext;
+        $cand = $stem . ' ' . $i . $tail . $ext;
         if (!file_exists($dir . '/' . $cand)) {
             return $cand;
         }
@@ -1465,6 +1709,7 @@ function md_tree_cache_file()
 function md_tree_cache_clear()
 {
     @unlink(md_tree_cache_file());
+    unset($GLOBALS['md_alias_index']);                  // 树要重扫，别名索引一并失效
 }
 
 /** 缓存指纹：白名单/排序/版本任一变化即整体失效。 */
@@ -1484,7 +1729,7 @@ function md_tree_cache_read($cfg)
     if (!is_array($d) || !isset($d['v'], $d['fp'], $d['built'], $d['tree']) || !is_array($d['tree'])) {
         return null;
     }
-    if ((int)$d['v'] !== 3 || $d['fp'] !== md_tree_fingerprint($cfg)) {
+    if ((int)$d['v'] !== 4 || $d['fp'] !== md_tree_fingerprint($cfg)) {
         return null;
     }
     return $d;
@@ -1501,7 +1746,7 @@ function md_tree_cache_write($tree, $cfg)
         @mkdir($dir, 0755, true);
     }
     $body = "<?php\n// DirDocs 目录树索引缓存（自动生成，可删除）\nreturn "
-        . var_export(array('v' => 3, 'fp' => md_tree_fingerprint($cfg), 'built' => time(), 'tree' => $tree), true) . ";\n";
+        . var_export(array('v' => 4, 'fp' => md_tree_fingerprint($cfg), 'built' => time(), 'tree' => $tree), true) . ";\n";
     return md_write_file($f, $body);
 }
 
@@ -1526,6 +1771,7 @@ function md_tree_load($cfg)
         }
     }
     $GLOBALS['md_tree'] = $tree;
+    unset($GLOBALS['md_alias_index']);                  // 换了树，别名索引按新树重建
     return $tree;
 }
 

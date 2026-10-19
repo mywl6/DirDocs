@@ -671,6 +671,7 @@ function md_mcp_call_write_doc($args, $cfg, $tok)
     $rel = $r[1];
     $fmNow = md_front_matter($content);
     $draft = !empty($fmNow['draft']);
+    md_tree_load($cfg);                                 // 重扫树，让 {{别名}} 的地址映射立刻生效
     $url = md_url_abs(md_site_origin($cfg), md_url_for($rel, 'doc', $cfg));
     md_mcp_log($tok['name'], 'write_doc', $rel, true);
     return md_mcp_tool_result(array(

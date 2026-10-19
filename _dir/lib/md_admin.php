@@ -1485,6 +1485,17 @@ function md_admin_docs($tree, $cfg)
     if ($ro) {
         $body .= '<div class="alert alert-warn">' . md_e(md_t('admin_readonly_warn')) . '</div>';
     }
+    // 别名冲突（v1.22.0）：同一地址被两个真实路径占用时，实际命中哪一个取决于登记顺序。
+    // 不在保存时硬拦（改名/批量搬动会互相牵连），只在这里把清单摊开让站长自己收口。
+    $aliasConflicts = md_alias_conflicts($tree, $cfg);
+    if ($aliasConflicts) {
+        $body .= '<div class="alert alert-warn">';
+        foreach ($aliasConflicts as $cUrl => $cRels) {
+            $body .= '<p>' . md_e(md_t('admin_alias_conflict',
+                array('url' => '/' . $cUrl, 'list' => implode('、', $cRels)))) . '</p>';
+        }
+        $body .= '</div>';
+    }
 
     $mdCount = isset($tree['md']) ? count($tree['md']) : 0;
     $dirCount = isset($tree['dir']) ? count($tree['dir']) : 0;
@@ -1541,12 +1552,15 @@ function md_admin_docs_level($tree, $cfg, $dirRel, $depth)
         $sub = md_children($rel, $tree, true);
         $hasChild = (bool)($sub['dir'] || $sub['md']);
         $label = md_display_name($d['name'], $cfg);
+        $alias = isset($d['alias']) ? (string)$d['alias'] : '';
         $mtime = isset($d['mtime']) ? (int)$d['mtime'] : 0;
         $html .= '<details class="admin-tree-dir" open data-dir="' . md_e($rel) . '">'
             . '<summary class="admin-tree-row admin-tree-dirrow">'
             . '<span class="admin-tree-caret"><i class="bi bi-chevron-right" aria-hidden="true"></i></span>'
             . md_admin_ico('folder')
             . '<span class="admin-tree-name">' . md_e($label) . '</span>'
+            . ($alias !== '' ? '<span class="admin-tree-tag" title="' . md_e(md_t('admin_alias_tag')) . '">/'
+                . md_e($alias) . '</span>' : '')
             . '<span class="admin-tree-meta">'
             . '<span class="admin-tree-path">' . md_e($rel) . '/</span>'
             . ($mtime > 0 ? '<span class="admin-dim admin-tree-time">' . md_e(date('Y-m-d H:i', $mtime)) . '</span>' : '')
@@ -1567,20 +1581,25 @@ function md_admin_docs_level($tree, $cfg, $dirRel, $depth)
         $rel = $m['rel'];
         $title = isset($m['title']) ? (string)$m['title'] : '';
         if ($title === '') {
-            $title = md_display_name(basename($rel, '.' . md_ext($rel)), $cfg);
+            $title = md_display_name(isset($m['label'])
+                ? (string)$m['label'] : basename($rel, '.' . md_ext($rel)), $cfg);
         }
+        $alias = isset($m['alias']) ? (string)$m['alias'] : '';
         $mtime = isset($m['mtime']) ? (int)$m['mtime'] : 0;
         $view = md_url_for(md_strip_doc_ext($rel, $cfg), 'doc', $cfg);
-        $isIndex = in_array(basename($rel, '.' . md_ext($rel)), array('README', 'readme', 'index', 'home', '首页'), true);
+        $isIndex = md_is_dir_index_name($rel);
         $isNew = ($mtime > 0 && (time() - $mtime) <= 604800);
         $isDraft = !empty($m['draft']);
         // 标题包一层链接（前台查看）：桌面是行内「查看」按钮，窄屏该按钮隐藏，
         // 标题成为进前台的入口（JS 不可用时 <a> 本身就可点）。
-        $html .= '<div class="admin-tree-row admin-tree-doc" data-search="' . md_e($rel . ' ' . $title) . '">'
+        $html .= '<div class="admin-tree-row admin-tree-doc" data-search="'
+            . md_e($rel . ' ' . $title . ($alias !== '' ? ' ' . $alias : '')) . '">'
             . '<span class="admin-tree-caret admin-tree-caret-off"></span>'
             . md_admin_ico('doc')
             . '<a class="admin-tree-name" href="' . md_e($view) . '" target="_blank" rel="noopener"'
             . ' title="' . md_e(md_t('admin_tip_view_doc', array('path' => $rel))) . '">' . md_e($title) . '</a>'
+            . ($alias !== '' ? '<span class="admin-tree-tag" title="' . md_e(md_t('admin_alias_tag')) . '">/'
+                . md_e($alias) . '</span>' : '')
             . ($isIndex ? '<span class="admin-tree-tag">' . md_e(md_t('tree_tag_home')) . '</span>' : '')
             . ($isNew ? '<span class="admin-tree-tag admin-tree-tag-new">NEW</span>' : '')
             . ($isDraft ? '<span class="admin-tree-tag admin-tree-tag-draft">' . md_e(md_t('tree_tag_draft')) . '</span>' : '')
@@ -1641,6 +1660,13 @@ function md_doc_save($rel, $content, $cfg, $createDir = false)
     if (!in_array(md_ext($rel), $cfg['ext_md'], true)) {
         return array(false, md_t('admin_err_ext', array('list' => implode(' / ', $cfg['ext_md']))));
     }
+    // {{别名}} 形态校验（v1.22.0）：别名只允许字母/数字/-/_/中文，且必须写成末尾的 {{别名}}
+    $docBase = basename($rel);
+    $docExt = md_ext($docBase);
+    $docStem = $docExt !== '' ? substr($docBase, 0, -(strlen($docExt) + 1)) : $docBase;
+    if (!md_alias_name_ok($docStem)) {
+        return array(false, md_t('admin_err_alias_bad'));
+    }
     $abs = md_resolve($rel, $cfg, 'md');
     if ($abs === false) {
         // 已有文档解析失败 → 按新文件处理：父目录必须存在（或可安全创建），文件名必须合法
@@ -1653,7 +1679,7 @@ function md_doc_save($rel, $content, $cfg, $createDir = false)
                 $ok = true;
                 $made = '';
                 foreach (explode('/', $dirPart) as $seg) {   // 逐段过文件名安全白名单再建
-                    if (md_safe_dirname($seg) === false) {
+                    if (md_safe_dirname($seg) === false || !md_alias_name_ok($seg)) {
                         $ok = false;
                         break;
                     }
@@ -1891,7 +1917,8 @@ function md_admin_editor_form($rel, $content, $title, $cfg, $dir0 = '', $base0 =
         . '<p class="form-hint">' . md_e(md_t('admin_dir_hint')) . '</p></div>'
         . '<div class="field"><label for="ed-base">' . md_e(md_t('admin_filename_label')) . '</label>'
         . '<input class="input" type="text" id="ed-base" name="base" value="' . md_e($baseVal) . '"'
-        . ' placeholder="' . md_e(md_t('admin_filename_ph')) . '" required></div>'
+        . ' placeholder="' . md_e(md_t('admin_filename_ph')) . '" required>'
+        . '<p class="form-hint">' . md_e(md_t('admin_filename_alias_hint')) . '</p></div>'
         . '</div>'
         . '<p class="form-hint admin-editor-prevwrap">' . md_e(md_t('admin_full_path')) . '<code class="admin-path" id="ed-preview">'
         . md_e($preview) . '</code>'
@@ -1981,8 +2008,13 @@ function md_admin_doc_rename($cfg)
         }
         $to = str_replace('\\', '/', trim($to, '/'));
         $toOk = md_resolve_path_only($to);
+        $toBaseRaw = basename($to);
+        $toExt = md_ext($toBaseRaw);
+        $toStem = $toExt !== '' ? substr($toBaseRaw, 0, -(strlen($toExt) + 1)) : $toBaseRaw;
         if ($toOk === false || !in_array(md_ext($to), $cfg['ext_md'], true)) {
             $err = md_t('admin_err_newpath', array('list' => implode(' / ', $cfg['ext_md'])));
+        } elseif (!md_alias_name_ok($toStem)) {
+            $err = md_t('admin_err_alias_bad');
         } elseif (strcasecmp($to, $old) === 0) {
             header('Location: ' . md_admin_url('docs', array('saved' => 'renamed')));   // 原样，视作成功
             exit;
@@ -2026,6 +2058,7 @@ function md_admin_doc_rename($cfg)
         . '<input class="input" type="text" id="rn-base" name="base" value="' . md_e($toBase) . '" required></div>'
         . '</div>'
         . '<p class="form-hint">' . md_e(md_t('admin_rename_hint')) . '</p>'
+        . '<p class="form-hint">' . md_e(md_t('admin_filename_alias_hint')) . '</p>'
         . '<p class="form-hint">' . md_e(md_t('admin_new_path')) . '<code class="admin-path" id="rn-preview">' . md_e($old) . '</code></p>'
         . '<div class="admin-actions-row">'
         . '<button class="btn btn-primary" type="submit">' . md_e(md_t('admin_rename_submit')) . '</button>'
@@ -2095,6 +2128,8 @@ function md_admin_dir_new($cfg)
             $err = md_t('admin_err_parent_missing_dir', array('path' => md_e($parent)));
         } elseif (md_safe_dirname($name) !== $name || $name === '') {
             $err = md_t('admin_err_dirname');
+        } elseif (!md_alias_name_ok($name)) {
+            $err = md_t('admin_err_alias_bad');
         } elseif (file_exists(MD_ROOT . ($parent === '' ? '' : '/' . $parent) . '/' . $name)) {
             $err = md_t('admin_err_exists_same');
         } elseif (@mkdir(MD_ROOT . ($parent === '' ? '' : '/' . $parent) . '/' . $name, 0755)) {
@@ -2122,6 +2157,7 @@ function md_admin_dir_new($cfg)
         . ' placeholder="' . md_e(md_t('admin_dirname_ph')) . '" required maxlength="128"></div>'
         . '</div>'
         . '<p class="form-hint">' . md_e(md_t('admin_dirnew_hint')) . '</p>'
+        . '<p class="form-hint">' . md_e(md_t('admin_dir_alias_hint')) . '</p>'
         . '<div class="admin-actions-row">'
         . '<button class="btn btn-primary" type="submit">' . md_admin_ico('folder-plus') . md_e(md_t('admin_create_dir')) . '</button>'
         . '<a class="btn btn-ghost" href="' . md_e(md_admin_url('docs')) . '">' . md_e(md_t('admin_back_list')) . '</a>'
@@ -2163,6 +2199,8 @@ function md_admin_dir_rename($cfg)
             $err = md_t('admin_err_target_parent_missing', array('path' => md_e($parent)));
         } elseif (md_safe_dirname($name) !== $name || $name === '') {
             $err = md_t('admin_err_dirname');
+        } elseif (!md_alias_name_ok($name)) {
+            $err = md_t('admin_err_alias_bad');
         } elseif ($parent !== '' && (md_starts_with($parent . '/', $old . '/'))) {
             $err = md_t('admin_err_dir_into_self');
         } elseif (strcasecmp($to, $old) === 0) {
@@ -2198,6 +2236,7 @@ function md_admin_dir_rename($cfg)
         . ' required maxlength="128"></div>'
         . '</div>'
         . '<p class="form-hint">' . md_e(md_t('admin_dir_rename_hint')) . '</p>'
+        . '<p class="form-hint">' . md_e(md_t('admin_dir_alias_hint')) . '</p>'
         . '<div class="admin-actions-row">'
         . '<button class="btn btn-primary" type="submit">' . md_e(md_t('admin_rename_submit')) . '</button>'
         . '<a class="btn btn-ghost" href="' . md_e(md_admin_url('docs')) . '">' . md_e(md_t('admin_back_list')) . '</a>'

@@ -41,7 +41,7 @@ define('MD_BOOT', 1);
  * 本文件里的串只作兜底。版本号必须落在升级会覆盖的位置——否则只更新 lib/ 的安装
  * 永远停在旧版本号上，新版本检查会一直提示「有新版」而升级后依旧。
  */
-$md_version = '1.21.1';
+$md_version = '1.22.0';
 $md_verfile = __DIR__ . '/_dir/lib/version.php';
 if (is_file($md_verfile)) {
     $md_v = @include $md_verfile;
@@ -188,7 +188,8 @@ if ($p === '') {
     md_show_dir('', $tree, $MD_CFG);
 }
 
-// 先按文档解析；失败再按目录解析
+// 先按文档解析；失败再按目录解析。真实路径永远优先于别名——
+// 已有文件/目录不会被同名的 {{别名}} 劫持。
 $abs = md_resolve($p, $MD_CFG, 'md');
 if ($abs !== false) {
     md_show_doc($p, $tree, $MD_CFG);
@@ -200,4 +201,15 @@ if ($absDir !== false && is_dir($absDir)
     md_show_dir($p, $tree, $MD_CFG);
 }
 
-md_abort(404);
+// {{别名}} 地址（v1.22.0）：反向索引把访问地址解析回真实相对路径。
+// 例：指南{{guide}}/01-简介{{intro}}.md 的地址是 /guide/intro，这里接住它。
+$alias = md_alias_resolve($p, $MD_CFG);
+if ($alias !== false) {
+    if ($alias['type'] === 'doc') {
+        md_show_doc($alias['rel'], $tree, $MD_CFG);
+    }
+    md_show_dir($alias['rel'], $tree, $MD_CFG);
+}
+
+// 整页 404：保留顶栏搜索、侧边栏与最近更新，让走错地址的访客仍能继续浏览
+md_show_404($tree, $MD_CFG, $p);
