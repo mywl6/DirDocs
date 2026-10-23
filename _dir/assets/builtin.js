@@ -150,7 +150,7 @@
       }
       var clone = doc.createElement('nav');
       clone.className = 'md-toc';                      // 保类名：scrollspy 高亮两份同步
-      clone.setAttribute('aria-label', mdT('js_toc_mobile_aria', '本页大纲（移动端）'));
+      clone.setAttribute('aria-label', mdT('js_toc_mobile_aria', '本页目录（移动端）'));
       clone.innerHTML = src.innerHTML;                 // 服务端渲染结构，无用户原始 HTML
       target.appendChild(clone);
       // 点大纲项：页面跳锚点后自动收起弹层

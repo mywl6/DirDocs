@@ -57,6 +57,9 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
   折叠块、`<kbd>`、`<sub>` 等原生标签净化后直接生效（后台关闭/标准/宽松三档；
   `script`、`iframe`、内联事件等危险标签任何档位都不放行）——AI 输出里常见的
   HTML 片段不再显示成一串字面标签
+- **视频直接在文档里播**：把 `.mp4` / `.webm` 放到文档同目录，`![演示视频](demo.mp4)`
+  就会渲染成原生播放器；附件区里的视频也会自动以播放器呈现（支持 Range 拖动进度条，
+  不需要第三方播放器）
 - **AI 反复重写有后悔药**：在线编辑每次覆盖保存自动留修订版本（每篇最近 20 版），
   可预览、对比、一键恢复；没定稿的先标 `draft: true`，导航/搜索/订阅/sitemap
   全部隐身，后台仍可预览
@@ -317,6 +320,9 @@ into the folder, it is already in the knowledge base.
   sanitized (off / standard / loose modes in the admin; `script`, `iframe` and
   inline event handlers are never allowed at any level), so HTML fragments in
   AI output no longer show up as a wall of literal tags
+- **Videos play in the doc**: drop an `.mp4` / `.webm` beside the Markdown file and
+  `![demo](demo.mp4)` renders a native player; video attachments also appear as
+  players (range requests for seeking, no third-party player needed)
 - **Undo for AI rewrites**: every overwrite-save in the online editor keeps a revision
   (last 20 per doc) with preview, diff and one-click restore; mark unfinished work
   `draft: true` and it vanishes from nav/search/feed/sitemap while staying previewable

@@ -33,7 +33,9 @@ function md_render_toc($toc, $cfg)
     }
     // 第三栏大纲（显示窗口 ≥1280px，宽度以 --toc-width 为基准在 200–320 间自适应）：
     // active 类名约定为 a.on（builtin.js scrollspy 写入）
-    $html = '<aside class="doc-toc d-none d-xl-block"><div class="toc-title">' . md_e(md_t('toc_title')) . '</div>'
+    // 标题行只留标签；active 类名约定为 a.on（builtin.js scrollspy 写入）
+    $html = '<aside class="doc-toc d-none d-xl-block"><div class="toc-head">'
+        . '<div class="toc-title">' . md_e(md_t('toc_title')) . '</div></div>'
         . '<nav class="md-toc" aria-label="' . md_e(md_t('toc_aria')) . '"><ul>';
     foreach ($entries as $h) {
         $depth = max(0, min(3, $h['level'] - $minLevel));
@@ -106,10 +108,10 @@ function md_tree_tag_html($rel, $mtime)
     $stem = $dot !== false ? substr($base, 0, $dot) : $base;
     $ap = md_alias_parse($stem);                        // {{别名}} 不参与首页/README 判定
     if (in_array($ap['name'], array('README', 'readme', 'index', 'home', '首页'), true)) {
-        return '<span class="tree-tag">' . md_e(md_t('tree_tag_home')) . '</span>';
+        return '<span class="tree-tag tree-tag-home">' . md_e(md_t('tree_tag_home')) . '</span>';
     }
     if ($mtime > 0 && (time() - $mtime) <= 604800) {
-        return '<span class="tree-tag">NEW</span>';
+        return '<span class="tree-tag tree-tag-new">NEW</span>';
     }
     return '';
 }
@@ -262,10 +264,14 @@ function md_nav_level($items, $tree, $cfg, $prefix, $activeRel)
         $open = ($activeRel !== '' && md_starts_with($activeRel, $d['rel'] . '/')) ? ' open' : '';
         // 空目录不给折叠箭头（折叠无意义）
         $emptyCls = $hasChild ? '' : ' is-empty';
-        $html .= '<li class="tree-node md-dir"><details' . $open . '><summary class="tree-link tree-folder' . $emptyCls . '">'
-            . '<span class="tree-row-main"><i class="bi bi-chevron-right folder-toggle" aria-hidden="true"></i>'
-            . '<i class="bi bi-folder2 md-folder-ico" aria-hidden="true"></i>'
-            . '<span class="tree-row-text">' . md_e(md_display_name($d['name'], $cfg)) . '</span></span>'
+        // 目录页把当前目录本身标成 active（祖先只展开，不抢高亮）
+        $currentCls = ($activeRel !== '' && $d['rel'] . '/' === $activeRel) ? ' active' : '';
+        $folderName = md_display_name($d['name'], $cfg);
+        // 折叠箭头放行尾：与文档行的图标槽对齐，长标题也不会被箭头挤压
+        $html .= '<li class="tree-node md-dir"><details' . $open . '><summary class="tree-link tree-folder' . $emptyCls . $currentCls . '"'
+            . ' title="' . md_e($folderName) . '">'
+            . '<span class="tree-row-main"><span class="tree-row-text">' . md_e($folderName) . '</span></span>'
+            . '<i class="bi bi-chevron-right folder-toggle" aria-hidden="true"></i>'
             . '</summary>';
         if ($hasChild) {
             $html .= '<ul>' . md_nav_level($sub, $tree, $cfg, $d['rel'], $activeRel) . '</ul>';
@@ -279,10 +285,11 @@ function md_nav_level($items, $tree, $cfg, $prefix, $activeRel)
         // 站内文档 URL 统一不带 .md 后缀
         $docRel = md_strip_doc_ext($m['rel'], $cfg);
         $mtime = isset($m['mtime']) ? (int)$m['mtime'] : 0;
+        $label = md_doc_label($m['rel'], $cfg);
         $html .= '<li class="tree-node"><a class="tree-link' . ($isActive ? ' active' : '') . '"'
-            . ($isActive ? ' aria-current="page"' : '') . ' href="' . md_e(md_url_for($docRel, 'doc', $cfg)) . '">'
-            . '<span class="tree-row-main"><i class="bi bi-file-earmark-text" aria-hidden="true"></i>'
-            . '<span class="tree-row-text">' . md_e(md_doc_label($m['rel'], $cfg)) . '</span></span>'
+            . ($isActive ? ' aria-current="page"' : '') . ' href="' . md_e(md_url_for($docRel, 'doc', $cfg)) . '"'
+            . ' title="' . md_e($label) . '">'
+            . '<span class="tree-row-main"><span class="tree-row-text">' . md_e($label) . '</span></span>'
             . md_tree_tag_html($m['rel'], $mtime)
             . '</a></li>';
     }
@@ -487,7 +494,8 @@ function md_show_dir($dirRel, $tree, $cfg)
     $ctx['cfg'] = $cfg;
     $ctx['page_title'] = $dirRel === '' ? $cfg['site_title'] : md_display_name(basename($dirRel), $cfg);
     $ctx['breadcrumbs'] = md_render_breadcrumbs($dirRel, $cfg);
-    $ctx['nav_html'] = md_render_nav($tree, $cfg, '');
+    // 目录页把当前目录当 active 传入并补尾斜杠：侧栏会展开整条祖先分支
+    $ctx['nav_html'] = md_render_nav($tree, $cfg, $dirRel === '' ? '' : $dirRel . '/');
     $ctx['toc_html'] = '';
     $ctx['risk_html'] = md_risk_html(md_exec_risk_files(MD_ROOT, $cfg), md_is_admin());
     $ctx['seo_canonical'] = md_canonical_for($dirRel, 'dir', $cfg);
@@ -703,17 +711,17 @@ function md_show_404($tree, $cfg, $reqPath = '')
     $ctx['seo_robots'] = 'noindex, follow';             // 404 不进索引，但仍允许跟随站内链接
     $ctx['seo_type'] = 'website';
 
-    $html = '<h1>404</h1>'
+    $html = '<h1 class="md-404-title">404</h1>'
         . '<p class="md-lead">' . md_e(md_t('err_404')) . '</p>';
     $reqPath = trim(str_replace('\\', '/', (string)$reqPath), '/');
     if ($reqPath !== '') {
         $html .= '<p class="md-hint">' . md_e(md_t('err_404_path', array('path' => $reqPath))) . '</p>';
     }
     // 站内搜索：移动端侧栏收在抽屉里，正文里的搜索框是 404 页最直接的出路
-    $html .= '<form class="md-searchbox md-404-search input-group" role="search" method="get" action="'
+    $html .= '<form class="md-searchbox md-404-search" role="search" method="get" action="'
         . md_e(md_url_for('', 'search', $cfg)) . '">'
-        . '<span class="input-group-text md-search-ico"><i class="bi bi-search" aria-hidden="true"></i></span>'
-        . '<input type="search" class="form-control" name="q" placeholder="' . md_e(md_t('search_ph')) . '"'
+        . '<i class="bi bi-search md-search-ico" aria-hidden="true"></i>'
+        . '<input type="search" class="form-control" name="q" placeholder="' . md_e(md_t('search_ph_simple')) . '"'
         . ' aria-label="' . md_e(md_t('search_aria')) . '">'
         . '<button class="btn btn-primary" type="submit">' . md_e(md_t('search_page_title')) . '</button>'
         . '</form>'
@@ -744,9 +752,9 @@ function md_show_404($tree, $cfg, $reqPath = '')
     }
 
     $html .= '<p class="md-404-acts">'
-        . '<a class="btn btn-primary rounded-3" href="' . md_e(md_url_for('', 'dir', $cfg)) . '">'
+        . '<a class="btn btn-primary" href="' . md_e(md_url_for('', 'dir', $cfg)) . '">'
         . '<i class="bi bi-house-door" aria-hidden="true"></i>' . md_e(md_t('back_home')) . '</a>'
-        . '<a class="btn btn-outline-primary rounded-3" href="' . md_e(md_url_for('', 'recent', $cfg)) . '">'
+        . '<a class="btn btn-outline-primary" href="' . md_e(md_url_for('', 'recent', $cfg)) . '">'
         . '<i class="bi bi-clock-history" aria-hidden="true"></i>' . md_e(md_t('recent_title')) . '</a>'
         . '</p>';
     $ctx['content_html'] = $html;
@@ -781,25 +789,41 @@ function md_attach_html($children, $cfg)
         return '';
     }
     $imgExt = array('png', 'jpg', 'jpeg', 'gif', 'webp', 'ico');
-    $html = '<ul>';
+    $videoExt = array('mp4', 'webm');
+    $videos = '';
+    $files = '';
     foreach ($children['attach'] as $a) {
         $url = md_url_for($a['rel'], 'file', $cfg);
         $name = $a['name'];
         $ext = md_ext($name);
-        if (in_array($ext, $imgExt, true)) {
+        if (in_array($ext, $videoExt, true)) {
+            // 视频附件：直接给原生播放器（?a=file 已支持 Range，可拖进度条）
+            $videos .= '<figure class="md-video-card">'
+                . '<video class="md-video" controls preload="metadata" playsinline src="' . md_e($url)
+                . '" title="' . md_e($name) . '"></video>'
+                . '<figcaption><span class="md-video-name">' . md_e($name) . '</span>'
+                . '<span class="md-size">' . md_e(md_format_size($a['size'])) . '</span></figcaption>'
+                . '</figure>';
+        } elseif (in_array($ext, $imgExt, true)) {
             // 图片附件：缩略图预览，点击看原图
-            $html .= '<li class="md-attach-img"><a href="' . md_e($url) . '" title="' . md_e($name) . '">'
+            $files .= '<li class="md-attach-img"><a href="' . md_e($url) . '" title="' . md_e($name) . '">'
                 . '<img src="' . md_e($url) . '" alt="' . md_e($name) . '" loading="lazy">'
                 . '</a><span class="md-size">' . md_e($name) . ' · ' . md_e(md_format_size($a['size'])) . '</span></li>';
         } else {
-            // 非图片附件：文件小图标，名称/大小交给卡片布局
-            $html .= '<li><span class="md-ico">' . md_ico_file() . '</span><a href="' . md_e($url) . '">'
+            // 非图片/视频附件：文件小图标，名称/大小交给卡片布局
+            $files .= '<li><span class="md-ico">' . md_ico_file() . '</span><a href="' . md_e($url) . '">'
                 . md_e($name) . '</a>'
                 . '<span class="md-size">' . md_e(md_format_size($a['size'])) . '</span></li>';
         }
     }
-    $html .= '</ul>';
-    return $html;
+    $out = '';
+    if ($videos !== '') {
+        $out .= '<div class="md-videos">' . $videos . '</div>';
+    }
+    if ($files !== '') {
+        $out .= '<ul>' . $files . '</ul>';
+    }
+    return $out;
 }
 
 /** 上一篇/下一篇：同目录内按排序取相邻文档，不跨目录（原型式翻页导流）。 */
@@ -826,7 +850,7 @@ function md_pager_html($children, $docRel, $cfg)
     if ($i >= count($flat)) {
         $right = '<span class="md-pager-off">' . md_e(md_t('pager_last')) . ' →</span>';
     } else {
-        $right = '<a class="btn btn-outline-primary btn-sm rounded-3 px-3 py-2 md-pager-next" href="'
+        $right = '<a class="md-pager-next" href="'
             . md_e(md_url_for($flat[$i]['doc'], 'doc', $cfg)) . '">'
             . '<span>' . md_e(md_t('pager_next', array('title' => md_title_of($flat[$i]['rel'])))) . '</span>'
             . '<i class="bi bi-arrow-right" aria-hidden="true"></i></a>';

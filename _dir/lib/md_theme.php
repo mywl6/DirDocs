@@ -58,55 +58,57 @@ function md_cdn_active($cfg = null)
  */
 function md_theme_builtin_manifests()
 {
-    $font = '-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif';
-    $mono = 'ui-monospace,SFMono-Regular,"Roboto Mono","Cascadia Code",Consolas,monospace';
+    $font = 'Inter,-apple-system,BlinkMacSystemFont,"Segoe UI Variable","Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",sans-serif';
+    $mono = 'ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace';
     $layout = array(
-        '--radius' => '12px', '--radius-sm' => '8px', '--font' => $font, '--mono' => $mono,
+        '--radius' => '8px', '--radius-sm' => '6px', '--font' => $font, '--mono' => $mono,
     );
     $base = array(
-        '--bg' => '#f8fafc', '--surface' => '#ffffff', '--elevated' => '#f1f5f9',
-        '--border' => '#e2e8f0', '--border-subtle' => '#f1f5f9', '--border-strong' => 'rgba(15,23,42,.16)',
-        '--text' => '#0f172a', '--text2' => '#64748b', '--text3' => '#94a3b8',
-        '--code-bg' => '#0f172a', '--code-fg' => '#e2e8f0', '--code-gutter' => '#334155',
-        '--danger' => '#dc2626', '--danger-weak' => 'rgba(220,38,38,.07)',
-        '--ok' => '#059669', '--ok-weak' => 'rgba(5,150,105,.08)',
-        '--warn' => '#d97706', '--warn-weak' => 'rgba(217,119,6,.08)',
+        '--bg' => '#f9fafb', '--surface' => '#ffffff', '--elevated' => '#f5f6f7',
+        '--border' => '#e1e5ee', '--border-subtle' => '#eef0f4', '--border-strong' => 'rgba(15,17,21,.18)',
+        '--text' => '#0f1115', '--text2' => '#61666b', '--text3' => '#8e939b',
+        '--code-bg' => '#1e1e1e', '--code-fg' => '#e6edf3', '--code-gutter' => '#6e7681',
+        '--danger' => '#d92d20', '--danger-weak' => 'rgba(217,45,32,.08)',
+        '--ok' => '#079455', '--ok-weak' => 'rgba(7,148,85,.08)',
+        '--warn' => '#b54708', '--warn-weak' => 'rgba(181,71,8,.09)',
     );
     $default = array(
         'name' => '默认主题',
         'dark' => false,
         'vars' => array_merge($base, $layout, array(
-            '--accent' => '#2563eb', '--accent-weak' => 'rgba(37,99,235,.08)',
-            '--mark-bg' => 'rgba(37,99,235,.12)',
-            '--shadow' => '0 1px 3px rgba(0,0,0,.03),0 12px 30px -6px rgba(15,23,42,.04)',
-            '--paper-shadow' => '0 1px 3px rgba(0,0,0,.03),0 12px 30px -6px rgba(15,23,42,.04)',
-            '--topbar-bg' => 'rgba(248,250,252,.85)',
+            '--accent' => '#3964fe', '--accent-weak' => '#e4edfd',
+            '--mark-bg' => 'rgba(57,100,254,.15)',
+            '--shadow' => '0 1px 2px rgba(15,17,21,.04),0 8px 24px -12px rgba(15,17,21,.16)',
+            '--paper-shadow' => '0 1px 2px rgba(15,17,21,.04),0 8px 24px -12px rgba(15,17,21,.16)',
+            '--topbar-bg' => '#ffffff',
         )),
         'vars-dark' => array_merge($base, $layout, array(
-            '--bg' => '#07090e', '--surface' => '#0e121e', '--elevated' => '#141a29',
-            '--border' => '#1e293b', '--border-subtle' => '#141a29', '--border-strong' => 'rgba(148,163,184,.28)',
-            '--text' => '#f1f5f9', '--text2' => '#94a3b8', '--text3' => '#6b7280',
-            '--accent' => '#3b82f6', '--accent-weak' => 'rgba(59,130,246,.14)',
-            '--mark-bg' => 'rgba(59,130,246,.22)',
-            '--code-bg' => '#05070c', '--code-fg' => '#cbd5e1', '--code-gutter' => '#475569',
-            '--danger' => '#f87171', '--danger-weak' => 'rgba(248,113,113,.12)',
-            '--ok' => '#34d399', '--ok-weak' => 'rgba(52,211,153,.12)',
-            '--warn' => '#fbbf24', '--warn-weak' => 'rgba(251,191,36,.12)',
-            '--shadow' => '0 4px 24px -2px rgba(0,0,0,.5)',
-            '--paper-shadow' => '0 4px 24px -2px rgba(0,0,0,.5)',
-            '--topbar-bg' => 'rgba(7,9,14,.8)',
+            '--bg' => '#1b1b1c', '--surface' => '#1b1b1c', '--elevated' => '#2c2c2e',
+            '--border' => '#353638', '--border-subtle' => '#2a2a2c', '--border-strong' => 'rgba(233,236,242,.22)',
+            '--text' => '#e9ecf2', '--text2' => '#adb2b8', '--text3' => '#7d8288',
+            '--accent' => '#679efe', '--accent-weak' => 'rgba(103,158,254,.16)',
+            '--mark-bg' => 'rgba(103,158,254,.22)',
+            '--code-bg' => '#1e1e1e', '--code-fg' => '#d4d4d4', '--code-gutter' => '#6e7681',
+            '--danger' => '#f97066', '--danger-weak' => 'rgba(249,112,102,.12)',
+            '--ok' => '#47cd89', '--ok-weak' => 'rgba(71,205,137,.12)',
+            '--warn' => '#fdb022', '--warn-weak' => 'rgba(253,176,34,.12)',
+            '--shadow' => '0 8px 24px -12px rgba(0,0,0,.7)',
+            '--paper-shadow' => '0 8px 24px -12px rgba(0,0,0,.7)',
+            '--topbar-bg' => '#232324',
         )),
     );
     $wiki = $default;
     $wiki['name'] = 'Wiki（青绿）';
     $wiki['vars'] = array_merge($default['vars'], array(
-        '--accent' => '#0f766e', '--accent-weak' => 'rgba(15,118,110,.08)',
+        '--accent' => '#0f766e', '--accent-weak' => 'rgba(15,118,110,.1)',
+        '--mark-bg' => 'rgba(15,118,110,.14)',
         '--bs-primary' => '#0f766e', '--bs-primary-rgb' => '15,118,110',
         '--bs-link-color' => '#0f766e', '--bs-link-color-rgb' => '15,118,110',
         '--bs-link-hover-color' => '#0d5f59',
     ));
     $wiki['vars-dark'] = array_merge($default['vars-dark'], array(
-        '--accent' => '#5eead4', '--accent-weak' => 'rgba(94,234,212,.1)',
+        '--accent' => '#5eead4', '--accent-weak' => 'rgba(94,234,212,.14)',
+        '--mark-bg' => 'rgba(94,234,212,.22)',
         '--bs-primary' => '#5eead4', '--bs-primary-rgb' => '94,234,212',
         '--bs-link-color' => '#5eead4', '--bs-link-color-rgb' => '94,234,212',
         '--bs-link-hover-color' => '#8ef5e4',
@@ -129,7 +131,7 @@ function md_theme_builtin_options_default()
         // 选择：影响整站圆角（含卡片与按钮），映射一组变量
         array(
             'key' => 'radius', 'type' => 'select', 'label' => '圆角风格', 'default' => '',
-            'hint' => '留空跟随主题默认（12px）',
+            'hint' => '留空跟随主题默认（8px）',
             'choices' => array(
                 '' => array('label' => '跟随主题'),
                 'none' => array('label' => '直角（无圆角）', 'css' => array(
@@ -827,7 +829,7 @@ function md_theme_resolve($cfg)
 function md_theme_css($theme, $withOptions = true)
 {
     $m = md_theme_manifest($theme);
-    $layout = '--nav-h:56px;--sidebar-width:275px;--toc-width:220px;--toc-max:320px;--content-w:860px;';
+    $layout = '--nav-h:56px;--sidebar-width:300px;--toc-width:240px;--toc-max:320px;--content-w:860px;';
     $emit = function ($vars) { $s = ''; foreach ($vars as $k => $v) { $s .= $k . ':' . $v . ';'; } return $s; };
     // 设计系统契约 token（与后台共用同一套变量名，builtin.css 内有逐字一致的兜底定义，
     // 本内联块位于 builtin.css 之后：同值覆写保证主题包生效）。

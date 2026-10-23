@@ -797,15 +797,15 @@ function md_safe_url($url)
 // ---------------------------------------------------------------- 原生 HTML 白名单（v1.21.0）
 
 /**
- * 三档 html_mode（off 全转义 / standard 推荐集 / loose 附加视觉与媒体）下的原生 HTML
- * 白名单通道。universe 在此单一出处，后台档位只做过滤，底线标签（script/iframe/
- * object/embed/form/input/link/meta）任何档位都不放行，on* 属性永远剥除。
+ * 三档 html_mode（off 全转义 / standard 推荐集（含视频/音频）/ loose 附加 style/id/class）
+ * 下的原生 HTML 白名单通道。universe 在此单一出处，后台档位只做过滤，底线标签
+ * （script/iframe/object/embed/form/input/link/meta）任何档位都不放行，on* 属性永远剥除。
  */
 
 /** 可开 HTML 块的块级标签（含 void 的 hr）：行首 ≤3 空格缩进、开/闭形态都算块起点。 */
 function md_html_block_tags()
 {
-    return array('div', 'p', 'center', 'details', 'summary', 'figure', 'figcaption', 'hr');
+    return array('div', 'p', 'center', 'details', 'summary', 'figure', 'figcaption', 'hr', 'video', 'audio');
 }
 
 /** 各档位的白名单标签集（未知档位按 standard 处理，配置写坏不失效渲染）。 */
@@ -816,8 +816,9 @@ function md_html_tags_for($mode)
         $standard = array_merge(md_html_block_tags(), array(
             'br', 'img', 'a', 'b', 'strong', 'i', 'em', 'u', 's', 'del',
             'mark', 'kbd', 'sub', 'sup', 'span', 'code', 'small',
+            'video', 'audio', 'source',
         ));
-        $loose = array_merge($standard, array('video', 'audio', 'source'));
+        $loose = $standard;                              // loose 只靠 md_html_attr 追加 style/id/class
         $c = array('off' => array(), 'standard' => $standard, 'loose' => $loose);
     }
     return isset($c[$mode]) ? $c[$mode] : $c['standard'];
@@ -835,6 +836,7 @@ function md_html_block_start($line, $mode)
 /**
  * 属性裁决。返回 'url'/'text'/'bool'（$val 已被规范化）或 false = 剥除该属性。
  * URL 类与 Markdown 图片/链接共用 md_safe_url 闸门；style/id/class 仅 loose 档。
+ * 视频/音频属性只放行播放所需的白名单值（preload 三档、poster 走 URL 闸门）。
  */
 function md_html_attr($tag, $name, $mode, &$val)
 {
@@ -842,7 +844,9 @@ function md_html_attr($tag, $name, $mode, &$val)
         || ($mode === 'loose' && ($name === 'style' || $name === 'id' || $name === 'class'))) {
         return 'text';
     }
-    if ($name === 'href' && $tag === 'a' || $name === 'src' && $tag !== 'a') {
+    if (($name === 'href' && $tag === 'a')
+        || ($name === 'src' && $tag !== 'a')
+        || ($name === 'poster' && $tag === 'video')) {
         $val = md_safe_url($val);
         return $val !== '' ? 'url' : false;
     }
@@ -856,10 +860,20 @@ function md_html_attr($tag, $name, $mode, &$val)
         && ($tag === 'img' || $tag === 'video' || $tag === 'audio')) {
         return preg_match('/^\d+%?$/', $val) === 1 ? 'text' : false;
     }
+    if ($name === 'preload' && ($tag === 'video' || $tag === 'audio')) {
+        $v = strtolower($val);
+        if (!in_array($v, array('none', 'metadata', 'auto'), true)) {
+            return false;
+        }
+        $val = $v;
+        return 'text';
+    }
     if ($name === 'open' && $tag === 'details'
-        || $name === 'controls' && ($tag === 'video' || $tag === 'audio')) {
+        || $name === 'controls' && ($tag === 'video' || $tag === 'audio')
+        || in_array($name, array('playsinline', 'loop', 'muted'), true)
+           && ($tag === 'video' || $tag === 'audio')) {
         // 布尔属性：HTML 语义里带值即为真，"false" 字面是常见误写——非真值一律剥除（视为关闭）
-        return in_array(strtolower($val), array('', 'true', 'open', '1', 'on'), true) ? 'bool' : false;
+        return in_array(strtolower($val), array('', 'true', 'open', '1', 'on', $name), true) ? 'bool' : false;
     }
     return false;
 }
@@ -1005,6 +1019,14 @@ function md_inline($text, $htmlMode = 'off')
                 return $alt;
             }
             $t = $title !== '' ? ' title="' . $title . '"' : '';
+            // ![说明](x.mp4)：视频扩展名走原生 <video>，图片语法与正文写法保持一致
+            $pathOnly = parse_url($safe, PHP_URL_PATH);
+            $ext = is_string($pathOnly) ? md_ext($pathOnly) : '';
+            if (in_array(strtolower($ext), array('mp4', 'webm'), true)) {
+                $label = $alt !== '' ? ' aria-label="' . $alt . '"' : '';
+                return '<video class="md-video" controls preload="metadata" playsinline src="'
+                    . md_e($safe) . '"' . $label . $t . '></video>';
+            }
             return '<img src="' . md_e($safe) . '" alt="' . $alt . '"' . $t . ' loading="lazy">';
         },
         $html
@@ -1186,7 +1208,8 @@ function md_render($text, $cfg = null)
                 $html .= '</tr>';
             }
             $html .= '</tbody></table>';
-            $out[] = $html;
+            // 滚动容器由主题样式接管：表格本身显示为 table（列宽铺满），外层负责横向滚动
+            $out[] = '<div class="table-wrap">' . $html . '</div>';
             continue;
         }
 
@@ -1255,7 +1278,7 @@ function md_rewrite_links($html, $docRel, $cfg)
     $dirRel = ($dirRel === '.' || $dirRel === '/') ? '' : $dirRel;
 
     return preg_replace_callback(
-        '/(href|src)="([^"]*)"/i',
+        '/(href|src|poster)="([^"]*)"/i',
         function ($m) use ($dirRel, $cfg) {
             $attr = strtolower($m[1]);
             $url = htmlspecialchars_decode($m[2], ENT_QUOTES);
@@ -1790,9 +1813,9 @@ function md_config_defaults()
         // （见 md_theme_options_normalize）：主题被删或改声明后，残留值不生效也不会报错
         'theme_options' => array(),
         'url_mode'      => 'simple',
-        // 原生 HTML 白名单档位（v1.21.0）：standard = 推荐集（GitHub README 常用标签），
-        // loose = 追加 style/id/class 与 video/audio，off = 一律字面显示（旧版行为）。
-        // 底线标签（script/iframe 等）任何档位不放行，详见 md_engine 的白名单节
+        // 原生 HTML 白名单档位（v1.21.0；v1.26.0 起视频/音频进 standard）：
+        // standard = 推荐集（README 常用标签 + video/audio），loose = 追加 style/id/class，
+        // off = 一律字面显示（旧版行为）。底线标签（script/iframe 等）任何档位不放行
         'html_mode'     => 'standard',
         'base_path'     => '',
         'home'          => '',

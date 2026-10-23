@@ -43,16 +43,17 @@ if (!defined('MD_BOOT')) {
       <i class="bi bi-list" aria-hidden="true"></i>
     </button>
     <a class="brand-text d-flex align-items-center gap-2" href="<?php echo md_e($home); ?>">
+      <img class="md-brand-mark" src="<?php echo md_e(md_url_for('img/favicon.svg', 'sys', $cfg) . '&v=' . rawurlencode(MD_VERSION)); ?>" alt="" width="22" height="22" aria-hidden="true">
       <span class="md-brand-label"><?php echo md_e($cfg['site_title']); ?></span>
-      <span class="brand-version"><?php echo md_e(MD_VERSION); ?></span>
     </a>
   </div>
   <div class="d-flex align-items-center gap-1 gap-md-2">
     <!-- 搜索：<576px 也不许消失（CSS 缩窄为 flex:1）；GET name=q，Ctrl/Cmd+K 与 / 聚焦 -->
-    <form class="md-searchbox input-group input-group-sm" role="search" method="get" action="<?php echo md_e($searchUrl); ?>">
-      <span class="input-group-text md-search-ico"><i class="bi bi-search" aria-hidden="true"></i></span>
-      <input type="search" class="form-control" name="q" placeholder="<?php echo md_e(md_t('search_ph')); ?>"
+    <form class="md-searchbox" role="search" method="get" action="<?php echo md_e($searchUrl); ?>">
+      <i class="bi bi-search md-search-ico" aria-hidden="true"></i>
+      <input type="search" class="form-control" name="q" placeholder="<?php echo md_e(md_t('search_ph_simple')); ?>"
              value="<?php echo md_e($q); ?>" aria-label="<?php echo md_e(md_t('search_aria')); ?>">
+      <kbd class="md-search-kbd" aria-hidden="true">Ctrl K</kbd>
     </form>
     <button type="button" class="md-iconbtn" data-md-toggle="theme" title="<?php echo md_e(md_t('theme_toggle')); ?>" aria-label="<?php echo md_e(md_t('theme_toggle')); ?>">
       <i class="bi bi-sun-fill md-ico-light" aria-hidden="true"></i><i class="bi bi-moon-stars-fill md-ico-dark" aria-hidden="true"></i>
@@ -87,14 +88,16 @@ if (!defined('MD_BOOT')) {
 <div class="md-workspace d-flex justify-content-between align-items-start">
   <!-- 桌面侧栏目录树 -->
   <aside class="doc-sidebar d-none d-lg-block" id="md-side">
-    <?php if ($cfg['site_desc'] !== ''): ?><p class="md-sitedesc"><?php echo md_e($cfg['site_desc']); ?></p><?php endif; ?>
-    <a class="md-recent-link" href="<?php echo md_e($recentUrl); ?>"><i class="bi bi-clock-history" aria-hidden="true"></i><?php echo md_e(md_t('recent_title')); ?></a>
+    <div class="md-side-head">
+      <?php if ($cfg['site_desc'] !== ''): ?><p class="md-sitedesc"><?php echo md_e($cfg['site_desc']); ?></p><?php endif; ?>
+      <a class="md-recent-link" href="<?php echo md_e($recentUrl); ?>"><i class="bi bi-clock-history" aria-hidden="true"></i><?php echo md_e(md_t('recent_title')); ?></a>
+    </div>
     <div class="sidebar-section-title"><?php echo md_e(md_t('doc_list')); ?></div>
     <?php echo $ctx['nav_html']; ?>
   </aside>
 
   <!-- 中间：独立浮起的纸张正文区 -->
-  <main class="md-main flex-grow-1 d-flex justify-content-center px-2 px-md-3" id="md-content">
+  <main class="md-main flex-grow-1 d-flex justify-content-center" id="md-content">
     <div class="md-stage-col">
     <?php echo isset($ctx['risk_html']) ? $ctx['risk_html'] : ''; ?>
     <?php if (!empty($themeOptions['notice'])): /* 站点公告：主题选项（后台「主题」页填写），留空不显示 */ ?>

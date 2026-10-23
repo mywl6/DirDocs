@@ -41,7 +41,7 @@ define('MD_BOOT', 1);
  * 本文件里的串只作兜底。版本号必须落在升级会覆盖的位置——否则只更新 lib/ 的安装
  * 永远停在旧版本号上，新版本检查会一直提示「有新版」而升级后依旧。
  */
-$md_version = '1.22.0';
+$md_version = '1.26.0';
 $md_verfile = __DIR__ . '/_dir/lib/version.php';
 if (is_file($md_verfile)) {
     $md_v = @include $md_verfile;

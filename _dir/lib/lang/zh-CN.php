@@ -11,7 +11,7 @@
 return array(
 
     // ---- 前台：TOC / 面包屑 / 树 ----
-    'toc_title'      => '本页大纲',
+    'toc_title'      => '本页目录',
     'toc_aria'       => '页内目录',
     'home'           => '首页',
     'crumb_aria'     => '面包屑',
@@ -413,10 +413,10 @@ return array(
     'admin_url_simple'      => 'simple（查询串，零配置）',
     'admin_url_pretty'      => 'pretty（伪静态，需服务器规则）',
     'admin_st_htmlmode_label' => '原生 HTML',
-    'admin_html_standard'   => '标准白名单（README 常用标签 + 折叠块）',
-    'admin_html_loose'      => '宽松（附加 style/id/class 与 video/audio）',
+    'admin_html_standard'   => '标准白名单（README 常用标签 + 折叠块 + 视频/音频）',
+    'admin_html_loose'      => '宽松（附加 style/id/class）',
     'admin_html_off'        => '关闭（原生标签一律字面显示）',
-    'admin_html_hint'       => 'Markdown 里的白名单 HTML 标签净化后渲染；危险标签（script/iframe/form 等）任何档位都不放行。',
+    'admin_html_hint'       => 'Markdown 里的白名单 HTML 标签净化后渲染；视频/音频可用 video/audio 标签或 ![说明](x.mp4)；危险标签（script/iframe/form 等）任何档位都不放行。',
     'admin_st_basepath_label' => '安装子目录（base path，留空自动检测）',
     'admin_st_home_label'   => '首页文档（留空自动取 README / index）',
     'admin_st_home_ph'      => '项目A/说明',
@@ -538,7 +538,7 @@ return array(
     'js_theme_dark'      => '主题：深色（点击切换浅色）',
     'js_theme_light'     => '主题：浅色（点击切换深色）',
     'js_doc_nav_aria'    => '文档目录',
-    'js_toc_mobile_aria' => '本页大纲（移动端）',
+    'js_toc_mobile_aria' => '本页目录（移动端）',
     'js_back_top'        => '回到顶部',
     'js_copy_code_aria'  => '复制代码',
     'js_copy'            => '复制',
