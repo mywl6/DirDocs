@@ -41,7 +41,7 @@ define('MD_BOOT', 1);
  * 本文件里的串只作兜底。版本号必须落在升级会覆盖的位置——否则只更新 lib/ 的安装
  * 永远停在旧版本号上，新版本检查会一直提示「有新版」而升级后依旧。
  */
-$md_version = '1.26.0';
+$md_version = '1.27.0';
 $md_verfile = __DIR__ . '/_dir/lib/version.php';
 if (is_file($md_verfile)) {
     $md_v = @include $md_verfile;
@@ -87,8 +87,21 @@ if (function_exists('mb_language')) { mb_language('uni'); }
 
 // ---------------------------------------------------------------- load
 
-$md_libs = array('md_engine.php', 'md_i18n.php', 'md_pages.php', 'md_theme.php', 'md_admin.php',
-                 'md_mcp.php');
+/**
+ * 发行形态开关（v1.27.0）：_dir/lib/md_admin.php 在盘上 = 完整版（后台 + MCP + 评论 + 反馈）；
+ * 不在 = 无后台版（纯只读站，由 md_noadmin.php 提供前台 stub）。
+ * 不引入配置键——物理存在性即开关，两形态共用同一份 index.php；
+ * 互相切换 = 用对应发行包覆盖 _dir/lib/（完整→无后台需按 Release 说明手工删残留文件）。
+ */
+define('MD_ADMIN', is_file(MD_LIB . '/md_admin.php'));
+
+if (MD_ADMIN) {
+    $md_libs = array('md_engine.php', 'md_i18n.php', 'md_pages.php', 'md_theme.php',
+                     'md_admin.php', 'md_mcp.php');
+} else {
+    $md_libs = array('md_engine.php', 'md_i18n.php', 'md_pages.php', 'md_theme.php',
+                     'md_noadmin.php');
+}
 foreach ($md_libs as $lib) {
     $path = MD_LIB . '/' . $lib;
     if (!is_file($path)) {
@@ -119,7 +132,7 @@ if ($action === 'asset') {
     md_send_asset($MD_CFG);                             // 主题/内置资产输出
 }
 
-if ($action === 'admin') {
+if (MD_ADMIN && $action === 'admin') {
     md_admin_dispatch($MD_CFG);
 }
 
@@ -134,8 +147,9 @@ if ($action === 'rss') {
 }
 
 // MCP API（v1.20.0）：POST ?a=mcp JSON-RPC 2.0（Streamable HTTP 无状态形态），认证/HTTPS/
-// 限流闸门在 md_mcp_endpoint 内部。与 feedback 同批：抢在搜索页拦截之前分发
-if ($action === 'mcp') {
+// 限流闸门在 md_mcp_endpoint 内部。与 feedback 同批：抢在搜索页拦截之前分发。
+// 无后台版无此端点（纯只读），请求落穿到文档路由
+if (MD_ADMIN && $action === 'mcp') {
     md_mcp_endpoint($MD_CFG);
 }
 
@@ -157,14 +171,15 @@ if (md_starts_with($p, '_theme/')) {
 $tree = md_tree_load($MD_CFG);
 
 // 反馈投票（v1.16.0）：POST ?a=feedback 匿名计数入 cache/feedback.json（限流 + 双提交令牌），
-// JSON 应答。必须在 ?q= 搜索页拦截之前——自带新 action 要抢在搜索页前面分发（v1.15.1 教训）
-if ($action === 'feedback') {
+// JSON 应答。必须在 ?q= 搜索页拦截之前——自带新 action 要抢在搜索页前面分发（v1.15.1 教训）。
+// 无后台版是纯只读站，公开写通道一律不存在
+if (MD_ADMIN && $action === 'feedback') {
     md_send_feedback($tree, $MD_CFG);
 }
 
 // 访客评论（v1.17.0）：POST ?a=comment 写入文档旁 <文档>.cmt.php（先审后显，限流 + 双提交令牌
 // + 时间陷阱 + 蜜罐），JSON 或 303 回跳应答。与 feedback 同批：抢在搜索页拦截之前分发
-if ($action === 'comment') {
+if (MD_ADMIN && $action === 'comment') {
     md_send_comment($tree, $MD_CFG);
 }
 

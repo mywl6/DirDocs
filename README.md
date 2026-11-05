@@ -133,6 +133,39 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
 运行时会自动探测，图表块以源码形态显示，其余功能零影响；后台概览会提示缺失。
 需要图表时把文件放回原位（来源与校验和见 `vendor/README.md`）即可恢复。
 
+### 两个发行版：完整版与无后台版（v1.27.0 起）
+
+每个 Release 提供两个发行形态，区别只有一个：**`_dir/lib/md_admin.php` 在不在包里**——
+程序启动时探测这个文件，在则完整版，不在则无后台版。两个版本的 `index.php`、配置格式、
+文档目录结构完全一致，互相切换只需按升级说明覆盖（见下方「切换形态」）。
+
+| 能力 | 完整版 `DirDocs-<版本>.zip` | 无后台版 `DirDocs-<版本>-noadmin.zip` |
+| --- | --- | --- |
+| 正文 / 附件 / 搜索 / 目录树 / RSS / sitemap | ✔ | ✔ |
+| 后台（登录、编辑、上传、主题、设置） | ✔ | — |
+| MCP API（`?a=mcp`，AI 写文档） | ✔ | — |
+| 访客评论 / 反馈投票 | ✔ | — |
+| 新版本检查 | ✔ | — |
+| 文档与附件管理方式 | 后台 或 文件系统 | 仅文件系统（FTP） |
+| 设置管理方式 | 后台 或 手编 `_dir/config.php` | 仅手编 `_dir/config.php` |
+| 运行时写盘 | 缓存、评论、历史等 | 仅内部缓存 |
+
+无后台版是**纯只读站**：没有任何登录入口、公开写接口或会执行业务写路径的代码——
+`?a=admin`、`?a=mcp`、`?a=comment`、`?a=feedback` 都不存在，草稿对所有人不可见，
+评论表单、反馈胶囊、风险警示条与后台链接一律不渲染。适合「内容由 CI/FTP 同步、
+访问者只读」的场景（对暴露到公网、又不想要任何登录面的站点尤其合适）。
+
+无后台版**全新部署不需要 `config.php`**（没有后台就没有初始密码流程）：拷 `index.php`
++ `_dir/` 即站；要调站点标题、主题、`html_mode` 等，直接手写 `_dir/config.php`
+（格式就是 `return array( 'site_title' => '…', … );`，其余键取默认值）。
+配置文件里与后台相关的键在无后台版**不起作用**：`admin_user`、`admin_pass`、
+`admin_totp`、`mcp_tokens`、`comments`、`smtp_*`、`notify_email`、`update_check`。
+
+**切换形态**：升级包只覆盖、不删除。无后台版 → 完整版：用完整版 update 包覆盖，
+后台即恢复（`admin_pass` 为空时首次访问 `?a=admin` 会引导设置密码）。完整版 → 无后台版：
+覆盖 noadmin update 包后，**必须手工删除** `_dir/lib/md_admin.php`、`_dir/lib/md_mcp.php`、
+`_dir/assets/admin.css`、`_dir/assets/admin.js` 四个文件（形态由 `md_admin.php` 是否存在决定）。
+
 ## 后台
 
 浏览器打开 **`http://你的域名/index.php?a=admin`**（或点任一页面右下角的"后台"链接）。
@@ -413,6 +446,46 @@ Per-version changes: [CHANGELOG.md](CHANGELOG.md) (Chinese).
 (~3.2 MB) — the runtime detects its absence, chart blocks render as source code, and
 everything else is unaffected; the admin overview flags the missing file. Put it back
 (sources and checksums in `vendor/README.md`) to re-enable charts.
+
+### Two editions: full and no-admin (since v1.27.0)
+
+Every Release ships two editions with exactly one difference: **whether
+`_dir/lib/md_admin.php` is in the package** — the program probes for that file at boot:
+present means full edition, absent means no-admin edition. Both share the same `index.php`,
+config format and docs layout; switching between them is just an overwrite (see
+"Switching editions" below).
+
+| Capability | Full `DirDocs-<version>.zip` | No-admin `DirDocs-<version>-noadmin.zip` |
+| --- | --- | --- |
+| Docs / attachments / search / tree / RSS / sitemap | ✔ | ✔ |
+| Admin panel (login, edit, upload, themes, settings) | ✔ | — |
+| MCP API (`?a=mcp`, AI writes docs) | ✔ | — |
+| Visitor comments / feedback voting | ✔ | — |
+| New-version check | ✔ | — |
+| Doc & attachment management | admin panel or filesystem | filesystem (FTP) only |
+| Settings management | admin panel or hand-edited `_dir/config.php` | hand-edited `_dir/config.php` only |
+| Runtime disk writes | cache, comments, history, … | internal cache only |
+
+The no-admin edition is a **pure read-only site**: no login entry point, no public write
+endpoints, no code paths that perform business writes — `?a=admin`, `?a=mcp`, `?a=comment`
+and `?a=feedback` simply do not exist, drafts are invisible to everyone, and the comment
+form, feedback widget, risk banners and admin links are never rendered. It suits sites
+whose content is synced by CI/FTP and whose visitors only read (especially public-facing
+sites that should carry no login surface at all).
+
+A fresh no-admin install **needs no `config.php`** (no admin means no initial-password
+flow): drop `index.php` + `_dir/` in and it runs. To change the site title, theme,
+`html_mode`, etc., write `_dir/config.php` by hand (it is just
+`return array( 'site_title' => '…', … );` — omitted keys fall back to defaults). Keys tied
+to the admin are **inert** in the no-admin edition: `admin_user`, `admin_pass`,
+`admin_totp`, `mcp_tokens`, `comments`, `smtp_*`, `notify_email`, `update_check`.
+
+**Switching editions**: update packs overwrite but never delete. No-admin → full: apply the
+full update pack and the admin returns (an empty `admin_pass` makes the first visit to
+`?a=admin` walk you through setting a password). Full → no-admin: after applying the
+no-admin update pack you **must manually delete** `_dir/lib/md_admin.php`,
+`_dir/lib/md_mcp.php`, `_dir/assets/admin.css` and `_dir/assets/admin.js` — the edition is
+decided by whether `md_admin.php` exists.
 
 ## Admin panel
 

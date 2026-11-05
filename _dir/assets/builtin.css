@@ -718,12 +718,26 @@ mark{background:var(--mark-bg);color:var(--accent);padding:1px 4px;border-radius
 .md-pager-prev span,.md-pager-next span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .md-pager-prev .bi,.md-pager-next .bi{flex:0 0 auto;font-size:.78rem;color:var(--text3)}
 
-/* ---------------- 附件区（卡片网格） ---------------- */
+/* ---------------- 附件区（默认折叠：原生 details/summary，标题/计数由 attach_html 自含） ---------------- */
 .md-attach{margin-top:2.5rem;padding-top:1.5rem;border-top:1px solid var(--border-subtle)}
-.md-attach h2{
-  margin:0 0 1rem;font-size:.66rem;font-weight:700;letter-spacing:.09em;
+.md-attach summary{
+  display:flex;align-items:center;gap:.55rem;cursor:pointer;list-style:none;
+  margin:0;font-size:.66rem;font-weight:700;letter-spacing:.09em;
   text-transform:uppercase;color:var(--text3);border:0;padding:0;
 }
+.md-attach summary::-webkit-details-marker{display:none}
+.md-attach summary:hover .md-attach-label,.md-attach summary:hover{color:var(--accent)}
+.md-attach summary:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:2px}
+.md-attach-count{
+  font-size:.62rem;font-weight:700;line-height:1;
+  padding:.22rem .45rem;border-radius:99px;
+  background:var(--elevated);border:1px solid var(--border);
+  letter-spacing:0;
+}
+.md-attach-chev{margin-left:auto;font-size:.72rem;transition:transform .15s ease}
+.md-attach details[open] .md-attach-chev,
+.md-attach-box[open] .md-attach-chev{transform:rotate(180deg)}
+.md-attach-body{margin-top:1rem}
 .md-attach ul{
   list-style:none;margin:0;padding:0;
   display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.75rem;

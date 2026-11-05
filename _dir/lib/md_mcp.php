@@ -34,42 +34,13 @@ if (!defined('MD_BOOT')) {
 define('MD_MCP_PROTOCOL', '2025-06-18');            // 实现所依据的 MCP 规范版本
 define('MD_MCP_BODY_MAX', 2 * 1024 * 1024);         // 单请求 body 上限
 define('MD_MCP_DOC_MAX', 1024 * 1024);              // 单文档写入上限
-define('MD_MCP_TOKENS_MAX', 20);                    // token 数量上限
+/* MD_MCP_TOKENS_MAX 与 md_mcp_tokens_normalize 已迁至 md_engine.php（v1.27.0）：
+ * 无后台版不加载本文件，而 md_config_load 每次请求都要做 token 归一化。 */
 define('MD_MCP_RL_READ', 600);                      // 读取限流：次/小时
 define('MD_MCP_RL_WRITE', 60);                      // 写入限流：次/小时
 define('MD_MCP_LOG_MAX', 1000);                     // 日志保留行数（超限裁剪）
 
 // ---------------------------------------------------------------- token 体系
-
-/**
- * token 记录归一化（config 写坏不报错）：只保形态合法的条目，scope 收口 read/write，
- * 数量封顶。判定与 md_config_load 对其余键的守卫同型。
- */
-function md_mcp_tokens_normalize($list)
-{
-    $out = array();
-    if (!is_array($list)) {
-        return $out;
-    }
-    foreach ($list as $id => $t) {
-        if (!is_array($t) || !isset($t['hash']) || !is_string($t['hash']) || $t['hash'] === '') {
-            continue;
-        }
-        $id = preg_match('/^[0-9a-f]{1,16}$/', (string)$id) === 1
-            ? (string)$id : substr(md5((string)$id), 0, 8);
-        $out[$id] = array(
-            'name'    => isset($t['name']) && is_string($t['name']) ? substr($t['name'], 0, 120) : '',
-            'hash'    => $t['hash'],
-            'scope'   => (isset($t['scope']) && $t['scope'] === 'write') ? 'write' : 'read',
-            'created' => isset($t['created']) ? (int)$t['created'] : 0,
-            'last'    => isset($t['last']) ? (int)$t['last'] : 0,
-        );
-        if (count($out) >= MD_MCP_TOKENS_MAX) {
-            break;
-        }
-    }
-    return $out;
-}
 
 /**
  * 生成一个 token（纯函数，不落盘——落盘由后台页经 md_config_set 完成）。

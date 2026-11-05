@@ -1,8 +1,12 @@
-> **部署**：下载下方 Assets 的 `DirDocs-<版本>.zip`，解压后把内容（`index.php` + `_dir/`）上传到任意 PHP 7.1 ~ 8.4 主机目录，访问即得文档站；示例文档可整体替换为你自己的 Markdown 目录。
-> **升级**：下载 `DirDocs-<版本>-update.zip`（覆盖升级包），解压后把 `index.php`、`_dir/lib/`、`_dir/assets/` 覆盖到安装目录即可（程序版本号在 `_dir/lib/version.php`，随 lib 一起更新）。包内不含站点数据（`_dir/config.php`、`_dir/cache/`、`_dir/themes/`、你的文档与附件），不会覆盖任何用户数据；内置主题 default/wiki 由程序按 `_dir/lib/` 里的权威副本自动同步，不需要你手工覆盖 `_dir/themes/`。
+> **两个发行版（v1.27.0 起）**：`DirDocs-<版本>.zip` 是完整版（含后台 / MCP / 评论 / 反馈）；`DirDocs-<版本>-noadmin.zip` 是**无后台版**——纯只读站，没有后台、MCP、评论与反馈接口，文档与附件只经文件系统（FTP）管理，设置纯靠手编 `_dir/config.php`。无后台版全新部署连 `config.php` 都不需要，丢文件即站。两个版本的配置格式完全一致。
+> **部署**：下载 `DirDocs-<版本>.zip`（或 `-noadmin.zip`），解压后把内容（`index.php` + `_dir/`）上传到任意 PHP 7.1 ~ 8.4 主机目录，访问即得文档站；示例文档可整体替换为你自己的 Markdown 目录。
+> **升级**：下载与当前形态对应的 `DirDocs-<版本>-update.zip`（完整版）或 `DirDocs-<版本>-update-noadmin.zip`（无后台版），解压后把 `index.php`、`_dir/lib/`、`_dir/assets/` 覆盖到安装目录即可（程序版本号在 `_dir/lib/version.php`，随 lib 一起更新）。包内不含站点数据（`_dir/config.php`、`_dir/cache/`、`_dir/themes/`、你的文档与附件），不会覆盖任何用户数据；内置主题 default/wiki 由程序按 `_dir/lib/` 里的权威副本自动同步，不需要你手工覆盖 `_dir/themes/`。
+> **切换形态**：升级包只覆盖不删除——无后台版 → 完整版：直接用完整版 update 包覆盖即可（`md_admin.php` 回来，后台自动恢复）；完整版 → 无后台版：覆盖 noadmin update 包后，**必须手工删除** `_dir/lib/md_admin.php`、`_dir/lib/md_mcp.php`、`_dir/assets/admin.css`、`_dir/assets/admin.js`（形态由 `md_admin.php` 是否存在判定）。附件下方 `checksums.txt` 是四个 zip 的 SHA-256。
 >
-> Deploy: extract `DirDocs-<version>.zip` onto any PHP 7.1–8.4 host — `index.php` + `_dir/` is the whole install.
-> Upgrade: extract `DirDocs-<version>-update.zip` and overwrite `index.php`, `_dir/lib/` and `_dir/assets/` in your install. The package contains no site data (`_dir/config.php`, `_dir/cache/`, `_dir/themes/`, your docs and attachments), so nothing of yours is overwritten; the built-in themes sync themselves from `_dir/lib/`.
+> **Two editions (since v1.27.0)**: `DirDocs-<version>.zip` is the full edition (admin / MCP / comments / feedback); `DirDocs-<version>-noadmin.zip` is the **no-admin edition** — a pure read-only site with no admin, MCP, comments or feedback endpoints. Manage docs and attachments over the filesystem (FTP) and settings by hand-editing `_dir/config.php`. A fresh no-admin install needs no `config.php` at all — drop the files in and it runs. Both editions share the same config format.
+> Deploy: extract `DirDocs-<version>.zip` (or `-noadmin.zip`) onto any PHP 7.1–8.4 host — `index.php` + `_dir/` is the whole install.
+> Upgrade: extract the update pack matching your edition — `DirDocs-<version>-update.zip` (full) or `DirDocs-<version>-update-noadmin.zip` (no-admin) — and overwrite `index.php`, `_dir/lib/` and `_dir/assets/` in your install. The package contains no site data (`_dir/config.php`, `_dir/cache/`, `_dir/themes/`, your docs and attachments), so nothing of yours is overwritten; the built-in themes sync themselves from `_dir/lib/`.
+> **Switching editions**: update packs overwrite but never delete — no-admin → full: just apply the full update pack (`md_admin.php` is back, the admin returns); full → no-admin: after applying the no-admin update pack you **must manually delete** `_dir/lib/md_admin.php`, `_dir/lib/md_mcp.php`, `_dir/assets/admin.css` and `_dir/assets/admin.js` (the edition is decided by whether `md_admin.php` exists). `checksums.txt` below carries SHA-256 for all four zips.
 
 ---
 

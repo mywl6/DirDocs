@@ -25,7 +25,7 @@ jobs:
           [ -s /tmp/section.md ] || echo "详见 [CHANGELOG.md](CHANGELOG.md)。" > /tmp/section.md
           cat .github/release-header.md /tmp/section.md > release_notes.md
 
-      - name: 打包（完整安装包 + 覆盖升级包）
+      - name: 打包（完整版 + 无后台版，各含安装包与升级包）
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           # 完整安装包：首次部署用（含示例文档说明与许可证）
@@ -38,6 +38,19 @@ jobs:
           git archive --format=zip --prefix="DirDocs-$VERSION-update/" \
             -o "DirDocs-${GITHUB_REF_NAME}-update.zip" \
             "$GITHUB_REF_NAME" -- index.php _dir/lib _dir/assets LICENSE
+          # 无后台版（v1.27.0）：从上面两个完整包各复制一份，删除后台/MCP/后台资产四个文件。
+          # index.php 按 md_admin.php 是否存在自动切换形态（MD_ADMIN），无需打补丁。
+          cp "DirDocs-${GITHUB_REF_NAME}.zip" "DirDocs-${GITHUB_REF_NAME}-noadmin.zip"
+          cp "DirDocs-${GITHUB_REF_NAME}-update.zip" "DirDocs-${GITHUB_REF_NAME}-update-noadmin.zip"
+          for z in "DirDocs-${GITHUB_REF_NAME}-noadmin.zip" "DirDocs-${GITHUB_REF_NAME}-update-noadmin.zip"; do
+            zip -d "$z" \
+              "*/_dir/lib/md_admin.php" \
+              "*/_dir/lib/md_mcp.php" \
+              "*/_dir/assets/admin.css" \
+              "*/_dir/assets/admin.js"
+          done
+          sha256sum DirDocs-${GITHUB_REF_NAME}*.zip > checksums.txt
+          cat checksums.txt
 
       - name: 创建 Release
         env:
@@ -45,6 +58,9 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" \
             "DirDocs-${GITHUB_REF_NAME}.zip" \
+            "DirDocs-${GITHUB_REF_NAME}-noadmin.zip" \
             "DirDocs-${GITHUB_REF_NAME}-update.zip" \
+            "DirDocs-${GITHUB_REF_NAME}-update-noadmin.zip" \
+            checksums.txt \
             --title "DirDocs $GITHUB_REF_NAME" \
             --notes-file release_notes.md

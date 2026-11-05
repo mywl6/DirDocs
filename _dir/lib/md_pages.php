@@ -239,7 +239,8 @@ function md_bylines_html($docRel, $contentHtml, $abs = '')
  */
 function md_feedback_html($docRel)
 {
-    if (MD_READONLY) {
+    // 无后台版是纯只读站（v1.27.0）：反馈端点不存在，胶囊整个不渲染
+    if (!MD_ADMIN || MD_READONLY) {
         return '';
     }
     $tk = md_feedback_token();
@@ -816,14 +817,24 @@ function md_attach_html($children, $cfg)
                 . '<span class="md-size">' . md_e(md_format_size($a['size'])) . '</span></li>';
         }
     }
-    $out = '';
+    $body = '';
     if ($videos !== '') {
-        $out .= '<div class="md-videos">' . $videos . '</div>';
+        $body .= '<div class="md-videos">' . $videos . '</div>';
     }
     if ($files !== '') {
-        $out .= '<ul>' . $files . '</ul>';
+        $body .= '<ul>' . $files . '</ul>';
     }
-    return $out;
+    if ($body === '') {
+        return '';
+    }
+    // 折叠容器（v1.26.1）：原生 details/summary，零 JS、自带键盘无障碍；
+    // 默认收起——附件多时不再把正文尾部撑成一堵墙。整块自含（含标题与计数），
+    // 主题侧只需输出 $ctx['attach_html']，fallback 模板无 CSS 时浏览器原生样式也能用
+    return '<details class="md-attach-box"><summary>'
+        . '<span class="md-attach-label">' . md_e(md_t('attachments')) . '</span>'
+        . '<span class="md-attach-count">' . count($children['attach']) . '</span>'
+        . '<i class="bi bi-chevron-down md-attach-chev" aria-hidden="true"></i>'
+        . '</summary><div class="md-attach-body">' . $body . '</div></details>';
 }
 
 /** 上一篇/下一篇：同目录内按排序取相邻文档，不跨目录（原型式翻页导流）。 */
@@ -1037,6 +1048,10 @@ function md_risk_ignored($rel, $cfg)
 
 function md_exec_risk_files($root, $cfg, $prefix = '', &$out = array())
 {
+    // 无后台版（v1.27.0）：风险警示只面向管理员处置，无后台无人能处理，直接不扫描
+    if (!MD_ADMIN) {
+        return array();
+    }
     static $dangerExt = null;
     if ($dangerExt === null) {
         $dangerExt = array('php', 'php3', 'php4', 'php5', 'php7', 'phps', 'phtml', 'phar',
@@ -1664,7 +1679,8 @@ function md_cmt_back_url($p, $tree, $cfg, $flash)
  */
 function md_cmt_html($key, $cfg)
 {
-    if ($key === false || empty($cfg['comments']) || MD_READONLY) {
+    // 无后台版是纯只读站（v1.27.0）：评论无审核通道，整块不渲染
+    if (!MD_ADMIN || $key === false || empty($cfg['comments']) || MD_READONLY) {
         return '';
     }
     $data = md_cmt_load($key);

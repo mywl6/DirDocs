@@ -4,6 +4,41 @@ DirDocs 对外可见的变更，按版本倒序记录，格式参照
 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。同一版本内按
 **新增 / 变更 / 修复 / 安全** 分组。
 
+## v1.27.0 - 2026-11-05
+
+### 新增
+
+- **双发行版：完整版 + 无后台版**。每个 Release 提供四个包：完整版安装/升级包
+  （`DirDocs-<版本>.zip` / `-update.zip`）与无后台版安装/升级包
+  （`-noadmin.zip` / `-update-noadmin.zip`），另附 `checksums.txt`（SHA-256）。
+- **无后台版 = 纯只读站**：不带 `md_admin.php`、`md_mcp.php`、`admin.css`、`admin.js`
+  四个文件，没有任何登录入口与公开写接口——`?a=admin` / `?a=mcp` / `?a=comment` /
+  `?a=feedback` 均不存在，草稿对所有人不可见，评论表单、反馈胶囊、风险警示条与
+  后台链接一律不渲染。文档与附件只经文件系统（FTP）管理，设置纯靠手编
+  `_dir/config.php`；全新部署不需要 config.php（无初始密码流程），丢文件即站。
+- 形态开关零配置：`index.php` 启动时探测 `_dir/lib/md_admin.php` 是否存在
+  （`MD_ADMIN` 常量）决定加载哪套模块，两形态共用同一份源码与配置格式；
+  升级包只覆盖不删除，互相切换方法见 Release 说明与 README。
+
+### 变更
+
+- 资产输出通道（`md_send_sys_asset` / `md_send_asset`）自 `md_admin.php` 迁入
+  `md_theme.php`；`md_mcp_tokens_normalize` + `MD_MCP_TOKENS_MAX` 与
+  `md_update_endpoint` 迁入 `md_engine.php`——前台模块不再依赖后台模块里的函数
+  （等价重构，完整版行为不变）。
+- 测试套件支持双形态：`php tests/run.php --noadmin` 按无后台形态跑（跳过
+  totp/history/update/mcp 四组，新增 group_noadmin 断言组）。
+
+## v1.26.1 - 2026-11-05
+
+### 变更
+
+- **附件区默认折叠**：文档详情页附件改用原生 `<details>/<summary>` 收起，标题行
+  （「附件」+ 数量徽章 + 展开箭头）替代原独立 `<h2>`，附件多时不再把正文尾部撑成
+  一堵墙。零 JS 依赖——键盘可聚焦、回车开合由浏览器原生提供；打印时 `beforeprint`
+  自动展开，打印稿不缺附件。fallback 模板（主题缺 view.php）与 ocean 示例主题
+  同步适配；自建主题若沿用旧版 `<h2>` 写法，请删除该行避免出现双重标题。
+
 ## v1.26.0 - 2026-10-21
 
 ### 新增

@@ -690,139 +690,6 @@ function md_admin_history($cfg)
     md_admin_page(md_t('admin_hist_title'), $body, 'docs');
 }
 
-// ---------------------------------------------------------------- 资产通道（sys 内置资产 / 主题资产）
-
-/**
- * 内置资产（_dir/assets/）：前后台共享样式/脚本 + 自托管三方库（v1.12.0 起）。
- * 文件名 => Content-Type 显式映射即白名单：加文件必须同步加 MIME，
- * 不存在任何「按后缀猜测」的路径，穿越/伪造在名单一步就 404。
- */
-function md_send_sys_asset($f)
-{
-    static $allow = array(
-        'builtin.css'                        => 'text/css; charset=utf-8',
-        'builtin.js'                         => 'application/javascript; charset=utf-8',
-        'theme-init.js'                      => 'application/javascript; charset=utf-8',
-        'admin.css'                          => 'text/css; charset=utf-8',
-        'admin.js'                           => 'application/javascript; charset=utf-8',
-        'img/favicon.svg'                    => 'image/svg+xml',
-        'img/favicon.ico'                    => 'image/x-icon',
-        'img/apple-touch-icon.png'           => 'image/png',
-        'img/icon-192.png'                   => 'image/png',
-        'img/icon-512.png'                   => 'image/png',
-        'vendor/bootstrap.min.css'           => 'text/css; charset=utf-8',
-        'vendor/bootstrap.bundle.min.js'     => 'application/javascript; charset=utf-8',
-        'vendor/bootstrap-icons.min.css'     => 'text/css; charset=utf-8',
-        'vendor/fonts/bootstrap-icons.woff2' => 'font/woff2',
-        'vendor/fonts/bootstrap-icons.woff'  => 'font/woff',
-        'vendor/mermaid.min.js'              => 'application/javascript; charset=utf-8',
-        'vendor/qrcode.min.js'               => 'application/javascript; charset=utf-8',
-    );
-    if (!isset($allow[$f])) {
-        md_abort(404);
-    }
-    $base = MD_DIR . '/assets';
-    $abs = realpath($base . '/' . $f);
-    $baseReal = realpath($base);
-    if ($abs === false || $baseReal === false) {
-        md_abort(404);
-    }
-    $abs = str_replace('\\', '/', $abs);
-    $baseReal = str_replace('\\', '/', $baseReal);
-    if (!md_starts_with($abs, $baseReal . '/')) {
-        md_abort(404);
-    }
-    $size = @filesize($abs);
-    $mtime = @filemtime($abs);
-    $etag = '"' . md5($abs . '|' . $mtime . '|' . $size) . '"';
-
-    header('X-Content-Type-Options: nosniff');
-    header('ETag: ' . $etag);
-    header('Cache-Control: private, max-age=31536000');   // 内置资产可长缓存
-    $ifNoneMatch = isset($_SERVER['HTTP_IF_NONE_MATCH']) ? trim($_SERVER['HTTP_IF_NONE_MATCH']) : '';
-    if ($ifNoneMatch !== '' && strpos($ifNoneMatch, $etag) !== false) {
-        http_response_code(304);
-        exit;
-    }
-    header('Content-Type: ' . $allow[$f]);
-    header('Content-Length: ' . $size);
-    readfile($abs);
-    exit;
-}
-
-/** 主题/内置资产输出（t=_sys 走内置，其余只认 _dir/themes/<t>/assets/ 下的真实文件）。 */
-function md_send_asset($cfg)
-{
-    $t = isset($_GET['t']) ? $_GET['t'] : '';
-    $f = isset($_GET['f']) ? $_GET['f'] : '';
-
-    // 程序内置资产（builtin.css / admin.css / admin.js）：t = _sys
-    if ($t === '_sys') {
-        md_send_sys_asset($f);
-    }
-
-    if (!preg_match('/^[a-z0-9_-]{1,32}$/', $t) || $f === '') {
-        md_abort(404);
-    }
-    $f = str_replace('\\', '/', $f);
-    foreach (explode('/', $f) as $seg) {
-        if ($seg === '' || $seg === '.' || $seg === '..') {
-            md_abort(404);
-        }
-    }
-    $ext = md_ext($f);
-    $allow = array('css', 'js', 'woff', 'woff2', 'ttf', 'otf', 'eot',
-                   'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'ico');
-    if (!in_array($ext, $allow, true)) {
-        md_abort(404);
-    }
-
-    // 只允许 _dir/themes/<t>/assets/ 下的真实文件
-    $base = MD_DIR . '/themes/' . $t . '/assets';
-    $abs = realpath($base . '/' . $f);
-    $baseReal = realpath($base);
-    if ($abs === false || $baseReal === false || is_link($base . '/' . $f)) {
-        md_abort(404);
-    }
-    $abs = str_replace('\\', '/', $abs);
-    $baseReal = str_replace('\\', '/', $baseReal);
-    if (!md_starts_with($abs, $baseReal . '/')) {
-        md_abort(404);
-    }
-    $mimes = array(
-        'css' => 'text/css; charset=utf-8', 'js' => 'application/javascript; charset=utf-8',
-        'woff' => 'font/woff', 'woff2' => 'font/woff2', 'ttf' => 'font/ttf',
-        'otf' => 'font/otf', 'eot' => 'application/vnd.ms-fontobject',
-        'png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg',
-        'gif' => 'image/gif', 'webp' => 'image/webp', 'svg' => 'image/svg+xml',
-        'ico' => 'image/x-icon',
-    );
-    $mtime = @filemtime($abs);
-    $size = @filesize($abs);
-    $etag = '"' . md5($abs . '|' . $mtime . '|' . $size) . '"';
-
-    md_security_headers();
-    header('ETag: ' . $etag);
-    header('Cache-Control: private, max-age=86400');
-    $ifNoneMatch = isset($_SERVER['HTTP_IF_NONE_MATCH']) ? trim($_SERVER['HTTP_IF_NONE_MATCH']) : '';
-    if ($ifNoneMatch !== '' && strpos($ifNoneMatch, $etag) !== false) {
-        http_response_code(304);
-        exit;
-    }
-    if ($ext === 'svg' && isset($_SERVER['HTTP_SEC_FETCH_DEST']) && $_SERVER['HTTP_SEC_FETCH_DEST'] === 'image') {
-        // 与前台附件通道同一策略：<img> 上下文放行内联（图片态 SVG 脚本不执行 + CSP 双保险），
-        // 其余上下文强制下载（堵诱导导航 XSS）；主题图标才能在 Markdown 里正常显示
-        header("Content-Security-Policy: script-src 'none'; object-src 'none'");
-        header('Content-Disposition: inline; filename="' . md_e(basename($abs)) . '"');
-    } elseif ($ext === 'svg') {
-        header('Content-Disposition: attachment; filename="' . md_e(basename($abs)) . '"');
-    }
-    header('Content-Type: ' . (isset($mimes[$ext]) ? $mimes[$ext] : 'application/octet-stream'));
-    header('Content-Length: ' . $size);
-    readfile($abs);
-    exit;
-}
-
 // ---------------------------------------------------------------- 配置写入 / 路径与主题工具
 
 /** 配置落盘：白名单合并 + 归一化 + 临时文件原子替换。写完即 md_config_reset()。 */
@@ -3595,13 +3462,8 @@ function md_admin_settings($cfg)
  * 检查目标（API / 人读的发行页）：仓库取自 md_project_repo()，全程序唯一出处。
  * 两条地址都由本地常量拼出，不采用应答里的任何 url 字段。
  */
-function md_update_endpoint()
-{
-    return array(
-        'api'  => 'https://api.github.com/repos/' . md_project_repo() . '/releases/latest',
-        'page' => md_project_url('releases/latest'),
-    );
-}
+/* md_update_endpoint() 已迁至 md_engine.php（v1.27.0）：纯 URL 构造，与 md_project_url/
+ * md_project_repo 同住（测试断言三者同源，且无后台版不加载本文件）。 */
 
 /** 检查结果缓存文件；$base 供测试注入临时目录，线上恒走默认。 */
 function md_update_cache_file($base = null)

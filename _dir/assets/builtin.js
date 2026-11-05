@@ -13,6 +13,8 @@
  *   9. mermaid 按需加载（深浅跟随 data-bs-theme）
  *  10. 站外链接：新窗口 + noopener/noreferrer + 外链小图标
  *  11. 图片灯箱（lightbox）：正文图片与附件缩略图页内预览，不再新开窗口
+ *  12. 评论（v1.17.0）：回复切换 + XHR 提交，无 JS 走原生 POST
+ *  13. 打印前展开折叠的附件区（v1.26.1，beforeprint）
  * 每个功能独立 try/catch：任何一步失败都不允许把页面搞挂。
  */
 (function () {
@@ -887,5 +889,17 @@
         say('is-err', form.getAttribute('data-cmt-err') || '');
       }
     });
+  })();
+
+  /* ---------------- 13. 打印前展开折叠的附件区（v1.26.1）----------------
+   * 附件默认收起（原生 details），直接 Ctrl+P 会把附件静默丢掉；
+   * beforeprint 里展开一次，保证打印稿不缺附件。展开后保持展开，不做还原。 */
+  (function () {
+    try {
+      window.addEventListener('beforeprint', function () {
+        var boxes = doc.querySelectorAll('details.md-attach-box:not([open])');
+        for (var i = 0; i < boxes.length; i++) boxes[i].open = true;
+      });
+    } catch (e) { /* 打印增强失败不影响页面 */ }
   })();
 })();

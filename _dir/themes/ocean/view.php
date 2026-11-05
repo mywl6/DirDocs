@@ -110,8 +110,8 @@ h1{font-size:2rem;line-height:1.35;margin:.2em 0 .6em;letter-spacing:.01em}
   <?php echo isset($ctx['comments_html']) ? $ctx['comments_html'] : ''; ?>
   <?php echo isset($ctx['pager_html']) ? $ctx['pager_html'] : ''; ?>
   <?php if (!empty($ctx['attach_html'])): ?>
-  <section style="margin-top:2.4rem">
-    <h2 style="font-size:1.05rem"><?php echo md_e(md_t('attachments')); ?></h2>
+  <section style="margin-top:2.4rem;border-top:1px solid #e5e7eb;padding-top:1.2rem">
+    <?php /* v1.26.1 起标题/计数/折叠由 attach_html 自含（details/summary），主题侧不再输出 h2 */ ?>
     <?php echo $ctx['attach_html']; ?>
   </section>
   <?php endif; ?>

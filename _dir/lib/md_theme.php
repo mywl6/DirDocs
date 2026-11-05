@@ -44,6 +44,139 @@ function md_cdn_active($cfg = null)
     );
 }
 
+// ---------------------------------------------------------------- 资产输出通道（v1.27.0 自 md_admin.php 迁入）
+
+/**
+ * 内置资产（_dir/assets/）：前后台共享样式/脚本 + 自托管三方库（v1.12.0 起）。
+ * 文件名 => Content-Type 显式映射即白名单：加文件必须同步加 MIME，
+ * 不存在任何「按后缀猜测」的路径，穿越/伪造在名单一步就 404。
+ */
+function md_send_sys_asset($f)
+{
+    static $allow = array(
+        'builtin.css'                        => 'text/css; charset=utf-8',
+        'builtin.js'                         => 'application/javascript; charset=utf-8',
+        'theme-init.js'                      => 'application/javascript; charset=utf-8',
+        'admin.css'                          => 'text/css; charset=utf-8',
+        'admin.js'                           => 'application/javascript; charset=utf-8',
+        'img/favicon.svg'                    => 'image/svg+xml',
+        'img/favicon.ico'                    => 'image/x-icon',
+        'img/apple-touch-icon.png'           => 'image/png',
+        'img/icon-192.png'                   => 'image/png',
+        'img/icon-512.png'                   => 'image/png',
+        'vendor/bootstrap.min.css'           => 'text/css; charset=utf-8',
+        'vendor/bootstrap.bundle.min.js'     => 'application/javascript; charset=utf-8',
+        'vendor/bootstrap-icons.min.css'     => 'text/css; charset=utf-8',
+        'vendor/fonts/bootstrap-icons.woff2' => 'font/woff2',
+        'vendor/fonts/bootstrap-icons.woff'  => 'font/woff',
+        'vendor/mermaid.min.js'              => 'application/javascript; charset=utf-8',
+        'vendor/qrcode.min.js'               => 'application/javascript; charset=utf-8',
+    );
+    if (!isset($allow[$f])) {
+        md_abort(404);
+    }
+    $base = MD_DIR . '/assets';
+    $abs = realpath($base . '/' . $f);
+    $baseReal = realpath($base);
+    if ($abs === false || $baseReal === false) {
+        md_abort(404);
+    }
+    $abs = str_replace('\\', '/', $abs);
+    $baseReal = str_replace('\\', '/', $baseReal);
+    if (!md_starts_with($abs, $baseReal . '/')) {
+        md_abort(404);
+    }
+    $size = @filesize($abs);
+    $mtime = @filemtime($abs);
+    $etag = '"' . md5($abs . '|' . $mtime . '|' . $size) . '"';
+
+    header('X-Content-Type-Options: nosniff');
+    header('ETag: ' . $etag);
+    header('Cache-Control: private, max-age=31536000');   // 内置资产可长缓存
+    $ifNoneMatch = isset($_SERVER['HTTP_IF_NONE_MATCH']) ? trim($_SERVER['HTTP_IF_NONE_MATCH']) : '';
+    if ($ifNoneMatch !== '' && strpos($ifNoneMatch, $etag) !== false) {
+        http_response_code(304);
+        exit;
+    }
+    header('Content-Type: ' . $allow[$f]);
+    header('Content-Length: ' . $size);
+    readfile($abs);
+    exit;
+}
+
+/** 主题/内置资产输出（t=_sys 走内置，其余只认 _dir/themes/<t>/assets/ 下的真实文件）。 */
+function md_send_asset($cfg)
+{
+    $t = isset($_GET['t']) ? $_GET['t'] : '';
+    $f = isset($_GET['f']) ? $_GET['f'] : '';
+
+    // 程序内置资产（builtin.css / admin.css / admin.js）：t = _sys
+    if ($t === '_sys') {
+        md_send_sys_asset($f);
+    }
+
+    if (!preg_match('/^[a-z0-9_-]{1,32}$/', $t) || $f === '') {
+        md_abort(404);
+    }
+    $f = str_replace('\\', '/', $f);
+    foreach (explode('/', $f) as $seg) {
+        if ($seg === '' || $seg === '.' || $seg === '..') {
+            md_abort(404);
+        }
+    }
+    $ext = md_ext($f);
+    $allow = array('css', 'js', 'woff', 'woff2', 'ttf', 'otf', 'eot',
+                   'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'ico');
+    if (!in_array($ext, $allow, true)) {
+        md_abort(404);
+    }
+
+    // 只允许 _dir/themes/<t>/assets/ 下的真实文件
+    $base = MD_DIR . '/themes/' . $t . '/assets';
+    $abs = realpath($base . '/' . $f);
+    $baseReal = realpath($base);
+    if ($abs === false || $baseReal === false || is_link($base . '/' . $f)) {
+        md_abort(404);
+    }
+    $abs = str_replace('\\', '/', $abs);
+    $baseReal = str_replace('\\', '/', $baseReal);
+    if (!md_starts_with($abs, $baseReal . '/')) {
+        md_abort(404);
+    }
+    $mimes = array(
+        'css' => 'text/css; charset=utf-8', 'js' => 'application/javascript; charset=utf-8',
+        'woff' => 'font/woff', 'woff2' => 'font/woff2', 'ttf' => 'font/ttf',
+        'otf' => 'font/otf', 'eot' => 'application/vnd.ms-fontobject',
+        'png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg',
+        'gif' => 'image/gif', 'webp' => 'image/webp', 'svg' => 'image/svg+xml',
+        'ico' => 'image/x-icon',
+    );
+    $mtime = @filemtime($abs);
+    $size = @filesize($abs);
+    $etag = '"' . md5($abs . '|' . $mtime . '|' . $size) . '"';
+
+    md_security_headers();
+    header('ETag: ' . $etag);
+    header('Cache-Control: private, max-age=86400');
+    $ifNoneMatch = isset($_SERVER['HTTP_IF_NONE_MATCH']) ? trim($_SERVER['HTTP_IF_NONE_MATCH']) : '';
+    if ($ifNoneMatch !== '' && strpos($ifNoneMatch, $etag) !== false) {
+        http_response_code(304);
+        exit;
+    }
+    if ($ext === 'svg' && isset($_SERVER['HTTP_SEC_FETCH_DEST']) && $_SERVER['HTTP_SEC_FETCH_DEST'] === 'image') {
+        // 与前台附件通道同一策略：<img> 上下文放行内联（图片态 SVG 脚本不执行 + CSP 双保险），
+        // 其余上下文强制下载（堵诱导导航 XSS）；主题图标才能在 Markdown 里正常显示
+        header("Content-Security-Policy: script-src 'none'; object-src 'none'");
+        header('Content-Disposition: inline; filename="' . md_e(basename($abs)) . '"');
+    } elseif ($ext === 'svg') {
+        header('Content-Disposition: attachment; filename="' . md_e(basename($abs)) . '"');
+    }
+    header('Content-Type: ' . (isset($mimes[$ext]) ? $mimes[$ext] : 'application/octet-stream'));
+    header('Content-Length: ' . $size);
+    readfile($abs);
+    exit;
+}
+
 // ---------------------------------------------------------------- 主题包系统
 
 /**
@@ -981,7 +1114,8 @@ function md_page($ctx)
     if ($mermaidUrl !== '' && !is_file(MD_DIR . '/assets/vendor/mermaid.min.js')) {
         $mermaidUrl = '';
     }
-    $hasAdmin = $cfg['admin_pass'] !== '';
+    // 无后台版（v1.27.0）：即使 config 残留 admin_pass 也不显示任何后台入口
+    $hasAdmin = MD_ADMIN && $cfg['admin_pass'] !== '';
     $headAssets = md_theme_head_assets($cfg, $theme);    // 防闪烁脚本 + CDN + builtin.css + 主题变量
     // 主题选项取值（v1.19.0）：键集合 = 当前主题声明的选项，值已过声明校验。
     // 模板可直接读 $themeOptions['键']，或用 md_theme_option($theme, '键')。

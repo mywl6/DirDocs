@@ -113,7 +113,7 @@ if (!defined('MD_BOOT')) {
       <?php echo isset($ctx['comments_html']) ? $ctx['comments_html'] : ''; ?>
       <?php echo isset($ctx['pager_html']) ? $ctx['pager_html'] : ''; ?>
       <?php if (!empty($ctx['attach_html'])): ?>
-      <section class="md-attach"><h2><?php echo md_e(md_t('attachments')); ?></h2><?php echo $ctx['attach_html']; ?></section>
+      <section class="md-attach"><?php /* v1.26.1 起标题/计数/折叠由 attach_html 自含（details/summary），主题侧不再输出 h2 */ echo $ctx['attach_html']; ?></section>
       <?php endif; ?>
       <footer class="md-footer-meta">
         <span>Powered by <a href="<?php echo md_e(md_project_url()); ?>" target="_blank" rel="noopener" title="<?php echo md_e(md_t('powered_by_title')); ?>"><i class="bi bi-github" aria-hidden="true"></i>DirDocs <?php echo md_e(MD_VERSION); ?></a></span>

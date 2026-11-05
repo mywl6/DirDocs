@@ -460,6 +460,16 @@ function md_project_url($path = '')
     return $path === '' ? $url : $url . '/' . $path;
 }
 
+/** 版本检查的两个地址（v1.18.0；v1.27.0 自 md_admin.php 迁入）：都从 md_project_repo() 派生，
+ * 换仓库只改一处。仅后台「新版本检查」使用；住在引擎是为单点同源与无后台形态的测试覆盖。 */
+function md_update_endpoint()
+{
+    return array(
+        'api'  => 'https://api.github.com/repos/' . md_project_repo() . '/releases/latest',
+        'page' => md_project_url('releases/latest'),
+    );
+}
+
 function md_is_hidden($name, $cfg)
 {
     foreach ($cfg['hidden_prefix'] as $pre) {
@@ -1865,6 +1875,42 @@ function md_config_defaults()
     );
 }
 
+/**
+ * MCP token 数量上限（v1.20.0；v1.27.0 自 md_mcp.php 迁入本文件——无后台版不加载 md_mcp.php，
+ * 而 md_config_load 每次都要调下面的归一化，常量与函数必须住在本文件）。
+ */
+define('MD_MCP_TOKENS_MAX', 20);
+
+/**
+ * token 记录归一化（config 写坏不报错）：只保形态合法的条目，scope 收口 read/write，
+ * 数量封顶。判定与 md_config_load 对其余键的守卫同型。
+ */
+function md_mcp_tokens_normalize($list)
+{
+    $out = array();
+    if (!is_array($list)) {
+        return $out;
+    }
+    foreach ($list as $id => $t) {
+        if (!is_array($t) || !isset($t['hash']) || !is_string($t['hash']) || $t['hash'] === '') {
+            continue;
+        }
+        $id = preg_match('/^[0-9a-f]{1,16}$/', (string)$id) === 1
+            ? (string)$id : substr(md5((string)$id), 0, 8);
+        $out[$id] = array(
+            'name'    => isset($t['name']) && is_string($t['name']) ? substr($t['name'], 0, 120) : '',
+            'hash'    => $t['hash'],
+            'scope'   => (isset($t['scope']) && $t['scope'] === 'write') ? 'write' : 'read',
+            'created' => isset($t['created']) ? (int)$t['created'] : 0,
+            'last'    => isset($t['last']) ? (int)$t['last'] : 0,
+        );
+        if (count($out) >= MD_MCP_TOKENS_MAX) {
+            break;
+        }
+    }
+    return $out;
+}
+
 function md_config_load()
 {
     if (isset($GLOBALS['md_cfg_cache'])) {
@@ -1907,8 +1953,8 @@ function md_config_load()
     }
     // 版本检查（v1.18.0）：配置写坏（字符串/数组）一律按「关」处理——只认真值布尔
     $cfg['update_check'] = !empty($cfg['update_check']);
-    // MCP API 令牌（v1.20.0）：只保形态合法的记录（归一在 md_mcp.php，本文件先于它加载，
-    // 函数调用发生在运行时，与 theme_options 同一先例）
+    // MCP API 令牌（v1.20.0）：只保形态合法的记录（归一化在本文件，v1.27.0 自 md_mcp.php 迁入——
+    // 无后台版不加载 md_mcp.php，本函数仍须可用）
     $cfg['mcp_tokens'] = md_mcp_tokens_normalize(isset($cfg['mcp_tokens']) ? $cfg['mcp_tokens'] : array());
     foreach (array('smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'smtp_from', 'smtp_secure', 'notify_email') as $k) {
         if (!isset($cfg[$k]) || !is_string($cfg[$k])) {
