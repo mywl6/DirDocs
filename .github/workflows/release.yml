@@ -49,6 +49,17 @@ jobs:
               "*/_dir/assets/admin.css" \
               "*/_dir/assets/admin.js"
           done
+          # 无后台安装包附带可编辑的配置模板（config.sample.php 的副本，全部键注释、
+          # return array() = 默认行为）：无后台版纯靠 config.php 管理，用户必须有个
+          # 看得见全量键位的地方。只进安装包、不进升级包——升级包永远不含 config.php，
+          # 避免覆盖用户已改的配置。config.sample.php 本体两包都随 _dir/ 分发，只读参考。
+          NA="DirDocs-${GITHUB_REF_NAME}-noadmin.zip"
+          NAABS="$(pwd)/$NA"
+          TMPN="$(mktemp -d)"
+          unzip -q "$NA" -d "$TMPN"
+          cp "$TMPN/DirDocs-$VERSION/_dir/config.sample.php" "$TMPN/DirDocs-$VERSION/_dir/config.php"
+          ( cd "$TMPN" && zip -q "$NAABS" "DirDocs-$VERSION/_dir/config.php" )
+          rm -rf "$TMPN"
           sha256sum DirDocs-${GITHUB_REF_NAME}*.zip > checksums.txt
           cat checksums.txt
 

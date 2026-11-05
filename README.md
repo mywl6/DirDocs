@@ -156,10 +156,14 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
 访问者只读」的场景（对暴露到公网、又不想要任何登录面的站点尤其合适）。
 
 无后台版**全新部署不需要 `config.php`**（没有后台就没有初始密码流程）：拷 `index.php`
-+ `_dir/` 即站；要调站点标题、主题、`html_mode` 等，直接手写 `_dir/config.php`
-（格式就是 `return array( 'site_title' => '…', … );`，其余键取默认值）。
++ `_dir/` 即站。**安装包内已带一份全量注释的 `_dir/config.php`**——所有可配键连同默认值
+都写在里面（全部注释掉，等价于默认行为），要调站点标题、主题、`html_mode` 等，
+打开它取消注释改值即可；`_dir/config.sample.php` 是同一份模板的只读参考副本
+（升级永远不动它，改坏了可以拿它对照恢复）。
 配置文件里与后台相关的键在无后台版**不起作用**：`admin_user`、`admin_pass`、
 `admin_totp`、`mcp_tokens`、`comments`、`smtp_*`、`notify_email`、`update_check`。
+注意：安装包用于全新部署，解压覆盖到已有站点会连 `config.php` 一起覆盖——
+已有站点的升级请始终用 update 升级包（升级包不含 `config.php`）。
 
 **切换形态**：升级包只覆盖、不删除。无后台版 → 完整版：用完整版 update 包覆盖，
 后台即恢复（`admin_pass` 为空时首次访问 `?a=admin` 会引导设置密码）。完整版 → 无后台版：
@@ -474,11 +478,17 @@ whose content is synced by CI/FTP and whose visitors only read (especially publi
 sites that should carry no login surface at all).
 
 A fresh no-admin install **needs no `config.php`** (no admin means no initial-password
-flow): drop `index.php` + `_dir/` in and it runs. To change the site title, theme,
-`html_mode`, etc., write `_dir/config.php` by hand (it is just
-`return array( 'site_title' => '…', … );` — omitted keys fall back to defaults). Keys tied
-to the admin are **inert** in the no-admin edition: `admin_user`, `admin_pass`,
-`admin_totp`, `mcp_tokens`, `comments`, `smtp_*`, `notify_email`, `update_check`.
+flow): drop `index.php` + `_dir/` in and it runs. **The install package already carries a
+fully commented `_dir/config.php`** — every configurable key with its default value is
+there (all commented out, which is the same as the default behaviour). To change the site
+title, theme, `html_mode`, etc., open it, uncomment the keys you want and edit the values;
+`_dir/config.sample.php` is a read-only reference copy of the same template (upgrades never
+touch it, so it is always there to restore against). Keys tied to the admin are **inert**
+in the no-admin edition: `admin_user`, `admin_pass`, `admin_totp`, `mcp_tokens`,
+`comments`, `smtp_*`, `notify_email`, `update_check`.
+Note: install packages are for fresh deployments — extracting one over an existing site
+also overwrites `config.php`. Always upgrade existing sites with the update pack, which
+never contains `config.php`.
 
 **Switching editions**: update packs overwrite but never delete. No-admin → full: apply the
 full update pack and the admin returns (an empty `admin_pass` makes the first visit to
