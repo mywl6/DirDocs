@@ -902,4 +902,23 @@
       });
     } catch (e) { /* 打印增强失败不影响页面 */ }
   })();
+
+  /* ---------------- 14. 附件区视频展开后才加载元数据（v1.27.8）----------------
+   * 附件区默认收起，但视频 preload="metadata" 仍会让页面打开时对每个视频各发
+   * 一次 Range 请求（十几个视频就是十几个请求）。服务端已改为 preload="none"，
+   * 这里在首次展开 details 后升到 metadata（补时长/首帧）；无 JS 环境不受
+   * 影响——preload=none 下手动点播放仍按需加载。 */
+  (function () {
+    try {
+      var boxes = doc.querySelectorAll('details.md-attach-box');
+      for (var i = 0; i < boxes.length; i++) {
+        boxes[i].addEventListener('toggle', function () {
+          if (!this.open || this.getAttribute('data-vid-up') === '1') return;
+          this.setAttribute('data-vid-up', '1');
+          var vs = this.querySelectorAll('video[preload="none"]');
+          for (var j = 0; j < vs.length; j++) vs[j].preload = 'metadata';
+        });
+      }
+    } catch (e) { /* 增强失败不影响页面 */ }
+  })();
 })();

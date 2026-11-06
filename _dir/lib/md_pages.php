@@ -798,9 +798,12 @@ function md_attach_html($children, $cfg)
         $name = $a['name'];
         $ext = md_ext($name);
         if (in_array($ext, $videoExt, true)) {
-            // 视频附件：直接给原生播放器（?a=file 已支持 Range，可拖进度条）
+            // 视频附件：直接给原生播放器（?a=file 已支持 Range，可拖进度条）。
+            // preload="none"：附件区默认折叠，页面打开时不再给每个视频各发一次
+            // 元数据请求；builtin.js 在首次展开 details 后才升到 metadata
+            //（无 JS 环境不受影响：手动点播放仍按需加载）
             $videos .= '<figure class="md-video-card">'
-                . '<video class="md-video" controls preload="metadata" playsinline src="' . md_e($url)
+                . '<video class="md-video" controls preload="none" playsinline src="' . md_e($url)
                 . '" title="' . md_e($name) . '"></video>'
                 . '<figcaption><span class="md-video-name">' . md_e($name) . '</span>'
                 . '<span class="md-size">' . md_e(md_format_size($a['size'])) . '</span></figcaption>'

@@ -48,7 +48,7 @@ if (!defined('MD_BOOT')) {
     </a>
   </div>
   <div class="d-flex align-items-center gap-1 gap-md-2">
-    <!-- 搜索：<576px 也不许消失（CSS 缩窄为 flex:1）；GET name=q，Ctrl/Cmd+K 与 / 聚焦 -->
+    <!-- 搜索：桌面完整输入框；<576px 收成单图标、聚焦展开浮层（builtin.css 移动端块）；GET name=q，Ctrl/Cmd+K 与 / 聚焦 -->
     <form class="md-searchbox" role="search" method="get" action="<?php echo md_e($searchUrl); ?>">
       <i class="bi bi-search md-search-ico" aria-hidden="true"></i>
       <input type="search" class="form-control" name="q" placeholder="<?php echo md_e(md_t('search_ph_simple')); ?>"
