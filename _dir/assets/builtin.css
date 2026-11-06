@@ -263,6 +263,49 @@ mark{background:var(--mark-bg);color:var(--accent);padding:1px 4px;border-radius
   padding:1px 5px;
 }
 
+/* ---------------- 移动端搜索弹层（v1.27.10）----------------
+   顶栏图标按钮触发：顶部面板 + 遮罩，输入自动聚焦；
+   遮罩/取消/Esc/视口变宽关闭（builtin.js 第 15 号功能）。 */
+.md-search-open{display:none}
+.md-searchsheet{position:fixed;inset:0;z-index:2000}
+.md-searchsheet[hidden]{display:none}
+.md-searchsheet-mask{position:absolute;inset:0;background:rgba(10,12,18,.45)}
+.md-searchsheet-panel{
+  position:relative;display:flex;align-items:center;gap:.6rem;
+  background:var(--surface);border-bottom:1px solid var(--border);
+  padding:calc(.7rem + env(safe-area-inset-top,0px)) .8rem .7rem;
+  animation:mdSheetIn .18s ease both;
+}
+@keyframes mdSheetIn{from{transform:translateY(-10px);opacity:.4}to{transform:none;opacity:1}}
+.md-searchsheet-form{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:.6rem}
+.md-searchsheet-field{
+  flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:.55rem;
+  height:44px;padding:0 .65rem;
+  background:var(--elevated);border:1px solid var(--border);border-radius:10px;
+  transition:border-color .15s ease,background-color .15s ease,box-shadow .15s ease;
+}
+.md-searchsheet-field:focus-within{
+  background:var(--surface);border-color:var(--accent);
+  box-shadow:0 0 0 3px var(--accent-weak);
+}
+.md-searchsheet-field .bi{flex:0 0 auto;color:var(--text3);font-size:1rem;line-height:1}
+.md-searchsheet-field input{
+  flex:1 1 auto;min-width:0;border:0;background:transparent;padding:0;
+  font-size:1rem;color:var(--text);outline:none;
+}
+.md-searchsheet-field input::placeholder{color:var(--text3)}
+/* 明确的提交按钮（v1.27.10）：移动端键盘「前往」不显眼，右侧给可点的「搜索」；
+   空关键词时由 JS 置 disabled（样式降透明度） */
+.md-searchsheet-submit{
+  flex:0 0 auto;height:44px;padding:0 .95rem;
+  border:1px solid var(--accent);border-radius:10px;
+  background:var(--accent);color:#fff;
+  font-size:.9rem;font-weight:500;cursor:pointer;
+  transition:opacity .15s ease;
+}
+.md-searchsheet-submit:disabled{opacity:.45;cursor:default}
+body.md-sheet-open{overflow:hidden}
+
 /* ---------------- 移动端抽屉（Bootstrap offcanvas，宽度同桌面侧栏） */
 .md-offcanvas{--bs-offcanvas-width:var(--sidebar-width);--bs-offcanvas-bg:var(--bg)}
 .md-offcanvas .offcanvas-header{
@@ -480,7 +523,7 @@ mark{background:var(--mark-bg);color:var(--accent);padding:1px 4px;border-radius
 .md-doc ul,.md-doc ol{margin:0 0 1.15em;padding-left:1.4em;color:var(--text)}
 .md-doc li{margin:.35em 0}
 .md-doc li::marker{color:var(--text3)}
-/* 列表内的链接不再继承正文色（v1.27.8 用户定案）：超链接一律保持链接蓝；
+/* 列表内的链接不再继承正文色（v1.27.10 用户定案）：超链接一律保持链接蓝；
    加粗文字仍跟随正文色（原规则保留 strong 一支）。原规则的权重(0,1,2)
    曾压过 .md-dirlist a 的链接色，是目录卡片标题显示为黑色的根因。 */
 .md-doc li>strong{color:inherit}
@@ -785,7 +828,7 @@ mark{background:var(--mark-bg);color:var(--accent);padding:1px 4px;border-radius
 /* ---------------- 目录索引（卡片网格） ---------------- */
 .md-dirlist{
   list-style:none;margin:1.75em 0 0;padding:0;
-  /* 列宽下限 400（v1.27.8，原 280）：每列须容得下「标题+文件名」同排才开两列，
+  /* 列宽下限 400（v1.27.10，原 280）：每列须容得下「标题+文件名」同排才开两列，
      否则长文件名会把标题挤瘪（实测 860 内容宽两列时标题只剩百余像素） */
   display:grid;grid-template-columns:repeat(auto-fit,minmax(400px,1fr));gap:.75rem;
 }
@@ -804,7 +847,7 @@ mark{background:var(--mark-bg);color:var(--accent);padding:1px 4px;border-radius
   display:grid;place-items:center;font-size:.95rem;
 }
 .md-dirlist a{
-  /* 卡片标题是链接 → 用链接主蓝（v1.27.8 用户定案），悬停加深一档 */
+  /* 卡片标题是链接 → 用链接主蓝（v1.27.10 用户定案），悬停加深一档 */
   flex:1 1 auto;font-weight:600;color:var(--accent);font-size:.9rem;
   min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
@@ -817,7 +860,7 @@ mark{background:var(--mark-bg);color:var(--accent);padding:1px 4px;border-radius
   font-family:var(--mono);font-variant-numeric:tabular-nums;
 }
 /* .md-doc ul 的 padding-left:1.4em 权重（0,2,0）高于 .md-dirlist 的 padding:0，
-   会渗进来造成卡片左缩 21px、右侧贴边的假「左内边距」（v1.27.8 修） */
+   会渗进来造成卡片左缩 21px、右侧贴边的假「左内边距」（v1.27.10 修） */
 .md-doc ul.md-dirlist{padding-left:0}
 
 /* ---------------- 搜索结果 / 最近更新 ---------------- */
@@ -998,33 +1041,18 @@ mark{background:var(--mark-bg);color:var(--accent);padding:1px 4px;border-radius
 }
 @media (max-width:575.98px){
   .top-navbar{padding-left:.6rem;padding-right:.6rem}
-  /* 目录索引移动端：左右留白一致（v1.27.8 用户定案）——卡片与正文同宽，
+  /* 目录索引移动端：左右留白一致（v1.27.10 用户定案）——卡片与正文同宽，
      左右各 1rem 对称；左侧多出的 21px 已由 .md-doc ul.md-dirlist{padding-left:0}
      权重修正解决，这里不再做任何不对称调整 */
-  /* 移动端搜索收成单个图标（v1.27.8 用户定案，取代旧「不许消失 flex:1」规则）：
-     input 透明平铺在整个圆角钮上 → 点图标区域即聚焦；:focus-within 展开成
-     顶栏浮层输入框（top-navbar 是 sticky，天然为 absolute 包含块），
-     提交非空 q 进搜索结果页。font-size 1rem 防 iOS 聚焦自动放大。 */
-  .top-navbar .md-searchbox{
-    position:relative;flex:0 0 auto;width:40px;justify-content:center;
-    border-color:transparent;background:transparent;
-  }
-  .top-navbar .md-searchbox .md-search-ico{font-size:1rem}
-  .top-navbar .md-searchbox .form-control{
-    position:absolute;inset:0;width:100%;opacity:0;cursor:pointer;
-    font-size:1rem;padding:0 .65rem 0 2.2rem;
-  }
-  .top-navbar .md-searchbox:focus-within{
-    position:absolute;left:.6rem;right:.6rem;top:50%;transform:translateY(-50%);
-    width:auto;height:38px;z-index:1060;
-    border-color:var(--accent);background:var(--surface);
-    box-shadow:0 0 0 3px var(--accent-weak);
-  }
-  .top-navbar .md-searchbox:focus-within .form-control{opacity:1;cursor:text}
+  /* 移动端搜索（v1.27.10 用户定案）：顶栏只留图标按钮，点击弹出搜索弹层
+     （.md-searchsheet，见文件上方独立块）；桌面输入框在 <576px 隐藏，
+     <noscript> 时由模板内联样式恢复显示 */
+  .top-navbar .md-searchbox{display:none}
+  .md-search-open{display:inline-flex}
   .md-brand-mark{display:none}
   .brand-version{display:none}
   .md-pager{grid-template-columns:1fr}
-  /* 目录索引移动端重排（v1.27.8）：单列 + minmax(0,1fr) 防横向溢出；
+  /* 目录索引移动端重排（v1.27.10）：单列 + minmax(0,1fr) 防横向溢出；
      标题换行完整显示；文件名元信息固定折到标题下一行、与标题左对齐 */
   .md-dirlist{grid-template-columns:minmax(0,1fr);gap:.6rem}
   .md-dirlist li{padding:.8rem .9rem}

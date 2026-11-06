@@ -48,7 +48,13 @@ if (!defined('MD_BOOT')) {
     </a>
   </div>
   <div class="d-flex align-items-center gap-1 gap-md-2">
-    <!-- 搜索：桌面完整输入框；<576px 收成单图标、聚焦展开浮层（builtin.css 移动端块）；GET name=q，Ctrl/Cmd+K 与 / 聚焦 -->
+    <!-- 搜索：桌面完整输入框；<576px 只留图标按钮，点击弹出搜索弹层（.md-searchsheet，见下方模板）。
+         GET name=q，Ctrl/Cmd+K 与 / 聚焦 -->
+    <button type="button" class="md-iconbtn md-search-open" data-md-search-open
+            aria-label="<?php echo md_e(md_t('search_aria')); ?>">
+      <i class="bi bi-search" aria-hidden="true"></i>
+    </button>
+    <noscript><style>.top-navbar .md-searchbox{display:flex!important}.md-search-open{display:none!important}</style></noscript>
     <form class="md-searchbox" role="search" method="get" action="<?php echo md_e($searchUrl); ?>">
       <i class="bi bi-search md-search-ico" aria-hidden="true"></i>
       <input type="search" class="form-control" name="q" placeholder="<?php echo md_e(md_t('search_ph_simple')); ?>"
@@ -60,6 +66,22 @@ if (!defined('MD_BOOT')) {
     </button>
   </div>
 </header>
+
+<!-- 移动端搜索弹层（<576px 顶栏图标触发；桌面不出现）：顶部面板 + 遮罩，
+     输入自动聚焦；「搜索」按钮提交（空关键词禁用），遮罩/Esc 关闭（builtin.js 第 15 号功能） -->
+<div class="md-searchsheet" data-md-searchsheet hidden>
+  <div class="md-searchsheet-mask" data-md-searchsheet-close></div>
+  <div class="md-searchsheet-panel" role="dialog" aria-modal="true" aria-label="<?php echo md_e(md_t('search_aria')); ?>">
+    <form class="md-searchsheet-form" role="search" method="get" action="<?php echo md_e($searchUrl); ?>">
+      <div class="md-searchsheet-field">
+        <i class="bi bi-search" aria-hidden="true"></i>
+        <input type="search" name="q" placeholder="<?php echo md_e(md_t('search_ph_simple')); ?>"
+               aria-label="<?php echo md_e(md_t('search_aria')); ?>" autocomplete="off">
+      </div>
+      <button type="submit" class="md-searchsheet-submit" data-md-search-submit disabled><?php echo md_e(md_t('search_btn')); ?></button>
+    </form>
+  </div>
+</div>
 
 <!-- 移动端侧栏抽屉：树由 builtin.js 从桌面树克隆，开合交给 Bootstrap offcanvas -->
 <div class="offcanvas offcanvas-start md-offcanvas" tabindex="-1" id="mobileSidebar" aria-label="<?php echo md_e(md_t('doc_nav_aria')); ?>">

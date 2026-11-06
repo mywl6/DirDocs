@@ -903,7 +903,7 @@
     } catch (e) { /* 打印增强失败不影响页面 */ }
   })();
 
-  /* ---------------- 14. 附件区视频展开后才加载元数据（v1.27.8）----------------
+  /* ---------------- 14. 附件区视频展开后才加载元数据（v1.27.10）----------------
    * 附件区默认收起，但视频 preload="metadata" 仍会让页面打开时对每个视频各发
    * 一次 Range 请求（十几个视频就是十几个请求）。服务端已改为 preload="none"，
    * 这里在首次展开 details 后升到 metadata（补时长/首帧）；无 JS 环境不受
@@ -919,6 +919,51 @@
           for (var j = 0; j < vs.length; j++) vs[j].preload = 'metadata';
         });
       }
+    } catch (e) { /* 增强失败不影响页面 */ }
+  })();
+
+  /* ---------------- 15. 移动端搜索弹层（v1.27.10）----------------
+   * 顶栏图标按钮打开顶部搜索面板：输入自动聚焦、锁定背景滚动；
+   * 右侧「搜索」按钮提交（空关键词时禁用）；遮罩/Esc/视口变宽自动关闭。
+   * 表单原生 GET 提交，无 JS 时由模板 <noscript> 样式恢复桌面输入框，不丢功能。 */
+  (function () {
+    try {
+      var sheet = doc.querySelector('[data-md-searchsheet]');
+      var openBtn = doc.querySelector('[data-md-search-open]');
+      if (!sheet || !openBtn) return;
+      var input = sheet.querySelector('input[name="q"]');
+      var submitBtn = sheet.querySelector('[data-md-search-submit]');
+      var lastFocus = null;
+      function syncSubmit() {
+        if (submitBtn && input) submitBtn.disabled = input.value.trim() === '';
+      }
+      function openSheet() {
+        lastFocus = document.activeElement;
+        sheet.hidden = false;
+        document.body.classList.add('md-sheet-open');
+        syncSubmit();
+        setTimeout(function () { if (input) input.focus(); }, 30);
+      }
+      function closeSheet() {
+        if (sheet.hidden) return;
+        sheet.hidden = true;
+        document.body.classList.remove('md-sheet-open');
+        if (lastFocus && lastFocus.focus) {
+          try { lastFocus.focus(); } catch (e) { }
+        }
+      }
+      if (input) input.addEventListener('input', syncSubmit);
+      openBtn.addEventListener('click', openSheet);
+      sheet.addEventListener('click', function (e) {
+        var t = e.target;
+        if (t && t.closest && t.closest('[data-md-searchsheet-close]')) closeSheet();
+      });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && !sheet.hidden) closeSheet();
+      });
+      window.addEventListener('resize', function () {
+        if (window.innerWidth >= 576 && !sheet.hidden) closeSheet();
+      });
     } catch (e) { /* 增强失败不影响页面 */ }
   })();
 })();
