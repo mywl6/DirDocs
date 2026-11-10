@@ -1,6 +1,6 @@
 <?php
 /**
- * DirDocs 配置模板（v1.27.1）——全量配置键与默认值参考，本文件永远不会被程序读取。
+ * DirDocs 配置模板（v1.28.0）——全量配置键与默认值参考，本文件永远不会被程序读取。
  *
  * 用法（无后台版）：
  *   无后台版安装包内已经带了一份本模板的副本，名为 _dir/config.php——直接打开
@@ -38,6 +38,8 @@ return array(
     // 'show_attach'   => true,                  // 文档详情页是否显示「附件」区（同目录的非 md 文件）
     // 'order_prefix'  => true,                  // 文件名数字前缀排序：true 时 '01-简介.md' 按 1 排序、前缀不显示
     // 'html_mode'     => 'standard',            // Markdown 里原生 HTML 的白名单档位：standard（常用标签 + video/audio）/ 'off'（全部按字面显示）/ 'loose'（追加 style/id/class）；script/iframe 等底线标签任何档位不放行
+    // 'img_external'  => true,                  // 外链图片：true（默认）= 允许任意 HTTPS 图床（CSP img-src 追加 https:）；false = 只允许本站/data: 与 img_hosts 白名单
+    // 'img_hosts'     => array(),               // 图片域名白名单（始终生效，可补放行 http 图床）：array('pan.0330.top', '*.example.com')；不带协议按 HTTPS，支持端口
     // 'url_mode'      => 'simple',              // URL 形态：simple（?p=文档路径）/ 'pretty'（路径式，需要服务器 rewrite 规则，见 nginx.htaccess 示例）
     // 'base_path'     => '',                    // 子目录部署前缀：留空自动探测；显式填写如 '/docs'（必须以 / 开头、无尾斜杠）
 

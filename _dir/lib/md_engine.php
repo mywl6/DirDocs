@@ -1810,6 +1810,53 @@ function md_tree_load($cfg)
 
 // ---------------------------------------------------------------- 基础（boot 依赖）
 
+/**
+ * 图片域名白名单归一化（v1.28.0）：接受 host、host:port、*.example.com，
+ * 可带 http:// 或 https:// 前缀（缺省 https）。输出 CSP host-source 形态，
+ * 去重、上限 50 条；带路径/空白/引号/分号的一律丢弃——白名单会拼进
+ * Content-Security-Policy 响应头，非法字符是头注入面，宁可丢弃不可转义。
+ * 只做形态校验，不发任何请求（图片由访客浏览器加载，服务器零外联不变）。
+ */
+function md_img_hosts_normalize($list)
+{
+    if (!is_array($list)) {
+        return array();
+    }
+    $out = array();
+    $seen = array();
+    foreach ($list as $raw) {
+        if (!is_scalar($raw)) {
+            continue;                                   // 配置写坏成嵌套数组时不触发 Array-to-string 警告
+        }
+        $line = strtolower(trim((string)$raw));
+        if ($line === '') {
+            continue;
+        }
+        $scheme = 'https';
+        if (strpos($line, 'http://') === 0) {
+            $scheme = 'http';
+            $line = substr($line, 7);
+        } elseif (strpos($line, 'https://') === 0) {
+            $line = substr($line, 8);
+        }
+        $line = rtrim($line, '/');
+        // 只允许 host / *.host / 带端口；单标签（localhost）与 IPv4 也落在这条正则里
+        if (preg_match('/^(?:\*\.)?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*(?::[0-9]{1,5})?$/', $line) !== 1) {
+            continue;
+        }
+        $val = $scheme . '://' . $line;
+        if (isset($seen[$val])) {
+            continue;
+        }
+        $seen[$val] = true;
+        $out[] = $val;
+        if (count($out) >= 50) {
+            break;
+        }
+    }
+    return $out;
+}
+
 function md_config_defaults()
 {
     return array(
@@ -1827,6 +1874,11 @@ function md_config_defaults()
         // standard = 推荐集（README 常用标签 + video/audio），loose = 追加 style/id/class，
         // off = 一律字面显示（旧版行为）。底线标签（script/iframe 等）任何档位不放行
         'html_mode'     => 'standard',
+        // 外链图片策略（v1.28.0）：true（默认）= 允许任意 HTTPS 图床（CSP img-src 追加 https:），
+        // false = 只允许本站/data: 与 img_hosts 白名单。白名单无论开关都追加，
+        // 用于在放行 HTTPS 的同时补一个 http 图床，或精确收口到少数域
+        'img_external'  => true,
+        'img_hosts'     => array(),
         'base_path'     => '',
         'home'          => '',
         'ext_md'        => array('md', 'markdown', 'txt'),
@@ -1945,6 +1997,14 @@ function md_config_load()
     if (!isset($cfg['html_mode']) || !in_array($cfg['html_mode'], array('off', 'standard', 'loose'), true)) {
         $cfg['html_mode'] = 'standard';
     }
+    // 外链图片策略（v1.28.0）：缺键按默认放行任意 HTTPS（老配置升级后即可显示图床图片）；
+    // 显式写 false 才收紧到白名单。白名单走形态归一，坏值不落到 CSP 头里
+    if (!isset($cfg['img_external'])) {
+        $cfg['img_external'] = true;
+    } else {
+        $cfg['img_external'] = !empty($cfg['img_external']);
+    }
+    $cfg['img_hosts'] = md_img_hosts_normalize(isset($cfg['img_hosts']) ? $cfg['img_hosts'] : array());
     // base_path 形态收口（config.php 允许手工编辑，写坏也要能跑）：见 md_base_path_normalize
     $cfg['base_path'] = md_base_path_normalize(isset($cfg['base_path']) ? $cfg['base_path'] : '');
     // 评论与邮件通知（v1.17.0）：布尔与字符串守卫，配置写坏也不影响主流程

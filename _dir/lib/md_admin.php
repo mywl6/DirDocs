@@ -704,7 +704,7 @@ function md_config_set($patch)
                    'base_path', 'site_url', 'risk_ignore', 'html_mode',
                    'comments', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass',
                    'smtp_from', 'smtp_secure', 'notify_email', 'update_check',
-                   'theme_options', 'mcp_tokens');
+                   'theme_options', 'mcp_tokens', 'img_external', 'img_hosts');
     $cfg = md_config_load();
     foreach ($patch as $k => $v) {
         if (in_array($k, $allow, true)) {
@@ -771,6 +771,10 @@ function md_config_set($patch)
     if (!in_array($cfg['html_mode'], array('off', 'standard', 'loose'), true)) {
         $cfg['html_mode'] = 'standard';
     }
+    // 外链图片策略（v1.28.0）：布尔收口 + 白名单形态归一（与读取侧同一函数，
+    // 带路径/空白/分号等非法字符的条目在落盘前就丢弃）
+    $cfg['img_external'] = !empty($cfg['img_external']);
+    $cfg['img_hosts'] = md_img_hosts_normalize(isset($cfg['img_hosts']) ? $cfg['img_hosts'] : array());
     // 主题选项取值：形态收口在 md_theme.php（只保合法层，值约束由主题声明在读取时施加）
     $cfg['theme_options'] = md_theme_options_normalize($cfg['theme_options']);
 
@@ -3005,6 +3009,9 @@ function md_admin_settings($cfg)
                 'language'      => isset($_POST['language']) ? (string)$_POST['language'] : 'auto',
                 'url_mode'      => isset($_POST['url_mode']) ? (string)$_POST['url_mode'] : 'simple',
                 'html_mode'     => isset($_POST['html_mode']) ? (string)$_POST['html_mode'] : 'standard',
+                'img_external'  => !empty($_POST['img_external']),
+                'img_hosts'     => isset($_POST['img_hosts'])
+                    ? preg_split('/\r\n|\r|\n/', (string)$_POST['img_hosts']) : array(),
                 'base_path'     => isset($_POST['base_path']) ? (string)$_POST['base_path'] : '',
                 'site_url'      => isset($_POST['site_url']) ? (string)$_POST['site_url'] : '',
                 'home'          => isset($_POST['home']) ? trim((string)$_POST['home']) : '',
@@ -3204,6 +3211,16 @@ function md_admin_settings($cfg)
         . '<option value="off"' . ($cfg['html_mode'] === 'off' ? ' selected' : '') . '>' . md_e(md_t('admin_html_off')) . '</option>'
         . '</select>'
         . '<div class="form-hint">' . md_e(md_t('admin_html_hint')) . '</div></div>'
+        . '<div class="field"><label for="ie">' . md_e(md_t('admin_st_imgmode_label')) . '</label>'
+        . '<select class="select" id="ie" name="img_external">'
+        . '<option value="1"' . (!empty($cfg['img_external']) ? ' selected' : '') . '>' . md_e(md_t('admin_img_https')) . '</option>'
+        . '<option value="0"' . (empty($cfg['img_external']) ? ' selected' : '') . '>' . md_e(md_t('admin_img_whitelist')) . '</option>'
+        . '</select>'
+        . '<div class="form-hint">' . md_e(md_t('admin_img_hint')) . '</div></div>'
+        . '<div class="field"><label for="ih">' . md_e(md_t('admin_st_img_hosts_label')) . '</label>'
+        . '<textarea class="textarea" id="ih" name="img_hosts" rows="3" spellcheck="false"'
+        . ' placeholder="pan.0330.top">' . md_e(implode("\n", $cfg['img_hosts'])) . '</textarea>'
+        . '<div class="form-hint">' . md_e(md_t('admin_st_img_hosts_hint')) . '</div></div>'
         . '<div class="field"><label for="bp">' . md_e(md_t('admin_st_basepath_label')) . '</label>'
         . '<input class="input" type="text" id="bp" name="base_path" value="' . md_e($cfg['base_path']) . '" placeholder="/docs"></div>'
         . '<div class="field"><label for="hm">' . md_e(md_t('admin_st_home_label')) . '</label>'

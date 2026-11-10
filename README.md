@@ -88,7 +88,8 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
 - 零安装：无安装向导、无路径配置、无数据库、无 composer 依赖
 - 零构建：原生 PHP + CSS 变量换肤，前端无框架
 - 零外联：Bootstrap / 图标字体 / mermaid / 二维码库全部自托管在 `_dir/assets/vendor/`，
-  运行时不向任何第三方域发出请求；两处例外都须站长在后台显式开启——SMTP 发信
+  运行时不向任何第三方域发出请求（文档里引用的外链图片由访客浏览器直接加载，
+  不经过站点服务器）；两处例外都须站长在后台显式开启——SMTP 发信
   （不填主机则全程不发信）与新版本检查（默认关闭，开启后每天至多查一次 GitHub Releases）。
   内网/断网环境保持默认即可
 - 兼容 PHP 7.1 ~ 8.4（廉价虚拟主机大量停在 7.x）
@@ -289,10 +290,13 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
   不含正文）；单请求 ≤ 2MB、单文档 ≤ 1MB。
 - **CSP**：每页下发 `Content-Security-Policy`（`default-src 'self'`、
   `script-src 'self'`、`form-action 'self'`、`base-uri 'self'`）。
-  全资源自托管后策略是纯本站，不放行任何第三方域；
-  `style-src` 保留 `unsafe-inline` 仅为程序生成的主题变量块。
-  页面上出现的站外地址（页脚/后台的项目主页）都是**普通链接与标识**，不是页面的资源引用，
-  不由浏览器自动加载，CSP 与零外联策略都不受影响。
+  除图片外全资源自托管、策略纯本站；`style-src` 保留 `unsafe-inline`
+  仅为程序生成的主题变量块。**图片默认放行任意 HTTPS 图床**
+  （`img-src 'self' data: https:`，图床截图可直接引用）；后台「设置 → 外链图片」
+  可收紧为「仅白名单域名」，只加载列出的域（支持 `*.example.com` 与端口，
+  白名单始终生效，可补放行个别 http 图床）。外链图片由访客浏览器直接加载，
+  站点服务器不发起任何请求；图床会看到访客 IP 与来源页，介意隐私就收紧白名单。
+  页脚/后台的站外项目主页仍是**普通链接**，不由浏览器自动加载。
 - **HTTP 层**：ETag/304 条件请求、单区间 Range（206/416 边界处理）、
   界面语言为自动模式时下发 `Vary: Accept-Language`（共享缓存按语言区分）、
   `display_errors` 强制关闭不泄露路径。
@@ -399,7 +403,8 @@ None of the above relies on any cloud service. It stands on a deliberately modes
 - Zero build: native PHP + CSS-variable theming, no frontend framework
 - Zero outbound requests: Bootstrap / icon fonts / mermaid / the QR library are all
   self-hosted under `_dir/assets/vendor/`; at runtime nothing is requested from any
-  third-party domain. Two exceptions exist, both off until the owner opts in on the
+  third-party domain (external images referenced by documents load in the visitor
+  browser, not on the server). Two exceptions exist, both off until the owner opts in on the
   admin: SMTP sending (nothing is sent while the host field is empty) and the update
   check (off by default; once enabled it queries GitHub Releases at most once a day).
   Intranet/offline installs can leave both untouched
@@ -602,12 +607,16 @@ Every mechanism is listed in the open — verify each against the source:
   429 when exceeded); every write lands in `cache/mcp-log.jsonl` (time/token/tool/path,
   never document content); request bodies cap at 2MB and documents at 1MB.
 - **CSP**: every page ships a `Content-Security-Policy` (`default-src 'self'`,
-  `script-src 'self'`, `form-action 'self'`, `base-uri 'self'`). With everything
-  self-hosted the policy is purely same-origin — no third-party domain is allowed;
-  `style-src` keeps `unsafe-inline` only for the program-generated theme variable block.
-  Off-site addresses shown on a page (the footer / admin "project home") are plain links
-  and identity text, never resource references — the browser does not fetch them, so the
-  CSP and the zero-outbound policy are unaffected.
+  `script-src 'self'`, `form-action 'self'`, `base-uri 'self'`). Everything except
+  images is self-hosted and same-origin only; `style-src` keeps `unsafe-inline` only
+  for the program-generated theme variable block. **External images are allowed from
+  any HTTPS host by default** (`img-src 'self' data: https:`), so image-host
+  screenshots work out of the box; Settings → External images can tighten this to
+  "Whitelisted domains only" (supports `*.example.com` and ports; the allowlist is
+  always applied and can add an individual HTTP host). External images load in the
+  visitor browser — the server makes no outbound request — but the image host sees
+  visitor IPs and referrers, so tighten the allowlist if that matters. Off-site
+  project links in the footer/admin remain plain links and are never auto-loaded.
 - **HTTP layer**: ETag/304 conditional requests, single-range support (206/416 edge
   handling), `Vary: Accept-Language` when the UI language is auto (shared caches vary by
   language), and `display_errors` forced off so paths never leak.

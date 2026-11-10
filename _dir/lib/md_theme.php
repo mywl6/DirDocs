@@ -999,13 +999,29 @@ function md_theme_head_assets($cfg, $theme)
 }
 
 /**
- * 前台/后台共用 CSP（v1.12.0 起全资源自托管，不再有外部源需要放行，策略退化为纯 'self'）。
+ * 前台/后台共用 CSP（v1.12.0 起全资源自托管；v1.28.0 起图片可按配置放行外链）。
  * 页面模板无任何内联 <script>（行为全在 builtin.js 与 bootstrap bundle）；style-src
- * 保留 unsafe-inline 仅为主题变量块。外链图片被拦是既定取舍（img-src 仅 self/data:）。
+ * 保留 unsafe-inline 仅为主题变量块。
+ * 图片策略：img_external=true（默认）→ img-src 追加 https:，任意 HTTPS 图床可用；
+ * false → 仅本站/data: 与 img_hosts 白名单。白名单无论开关都追加（可补 http 图床）。
+ * 其余指令仍是纯 'self'——脚本/样式/字体/表单/连接都不放行第三方域。
  */
 function md_theme_csp($cfg = null)
 {
-    return "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+    if (!is_array($cfg)) {
+        $cfg = function_exists('md_config_load')
+            ? md_config_load() : array('img_external' => true);
+    }
+    $img = "img-src 'self' data:";
+    // 缺键按默认放行（与 md_config_load 的缺键语义一致）；显式 false 才收紧
+    $external = array_key_exists('img_external', $cfg) ? !empty($cfg['img_external']) : true;
+    if ($external) {
+        $img .= ' https:';
+    }
+    foreach (md_img_hosts_normalize(isset($cfg['img_hosts']) ? $cfg['img_hosts'] : array()) as $host) {
+        $img .= ' ' . $host;
+    }
+    return "default-src 'self'; " . $img . "; style-src 'self' 'unsafe-inline'; "
         . "font-src 'self'; script-src 'self'; connect-src 'self'; "
         . "form-action 'self'; base-uri 'self'";
 }

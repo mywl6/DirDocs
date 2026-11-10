@@ -15,5 +15,5 @@ if (!defined('MD_BOOT')) {
     exit;
 }
 return array(
-    'version' => '1.27.10',
+    'version' => '1.28.0',
 );
