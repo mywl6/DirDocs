@@ -79,7 +79,9 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
   （新评论提醒站长、回复提醒被回复者；SMTP 主机不填则零外联，发信失败静默）
 - **机器同样可读**：`?a=rss` 订阅最近 20 篇更新，`?a=sitemap` 全站清单；
   文档本体永远是目录里的纯文件，编辑器、脚本、AI 工具随时直接读写
-- **找得到**：前台 `Ctrl+K` 呼出全站搜索弹窗；最近更新页支持按月浏览
+- **找得到**：前台 `Ctrl+K` 呼出全站搜索弹窗；查询按词元分片（中文相邻二元组、
+  拉丁整词）并按覆盖度排序，自然语言长句和换序说法（「报告导出」「如何导出测评报告」）
+  同样能召回；最近更新页支持按月浏览
   （`?a=recent&ym=2026-10`，只在有更新的月份之间切换）；走错地址也不会断路——
   404 页保留顶栏搜索、侧边栏目录树与最近更新入口
 
@@ -406,7 +408,10 @@ into the folder, it is already in the knowledge base.
 - **Machine-readable too**: `?a=rss` subscribes to the last 20 updates, `?a=sitemap`
   lists the whole site; docs remain plain files in a folder — editors, scripts and AI
   tools read and write them directly at any time
-- **Findable**: `Ctrl+K` summons a site-wide search palette; the recent-updates page is
+- **Findable**: `Ctrl+K` summons a site-wide search palette; queries are tokenized (CJK
+  bigrams, whole words for Latin) and ranked by term coverage, so long natural-language
+  sentences and reordered phrasing ("report export", "how do I export the report") still
+  recall the right pages; the recent-updates page is
   browsable by month (`?a=recent&ym=2026-10`, switching only between months that have
   updates); a wrong address no longer dead-ends — the 404 page keeps the top-bar
   search, the sidebar tree and recent-update links

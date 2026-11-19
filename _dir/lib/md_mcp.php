@@ -508,7 +508,9 @@ function md_mcp_tools()
         array(
             'name' => 'search_docs',
             'description' => "Full-text search across published documents (same engine as the site's "
-                . 'Ctrl+K search). Drafts are not indexed. Returns paths, titles and snippets.',
+                . 'Ctrl+K search). Queries are tokenized (CJK bigrams, whole words for Latin) and '
+                . 'ranked by term coverage, so natural-language phrases and word-order variations '
+                . 'work. Drafts are not indexed. Returns paths, titles and snippets.',
             'inputSchema' => array(
                 'type' => 'object',
                 'properties' => array(
@@ -667,6 +669,7 @@ function md_mcp_call_search_docs($args, $cfg)
             'title'   => $r['title'],
             'snippet' => $r['snippet'],
             'score'   => (int)$r['score'],
+            'coverage' => isset($r['coverage']) ? $r['coverage'] : 0,
             'updated' => !empty($r['mtime']) ? date('c', (int)$r['mtime']) : '',
         );
     }

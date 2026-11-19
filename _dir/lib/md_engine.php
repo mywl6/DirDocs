@@ -1545,10 +1545,74 @@ function md_search_ready($cfg)
     return is_file(md_search_index_file());
 }
 
+define('MD_SEARCH_TERMS_MAX', 12);   // 查询词元上限：覆盖长句，又不让一次搜索退化成几十遍全表扫描
+define('MD_SEARCH_HITS_MAX', 20);    // 单个词元的计次上限（防极端长文拖慢）
+
+/**
+ * 查询分词（纯函数，v1.30.0）：按空白/标点切段；含 CJK 的段拆成相邻二元组（bigram），
+ * 拉丁/数字段整词保留（小写归并）。覆盖率排序靠这组词元，不再要求整串原样出现。
+ * 例：「如何导出测评报告」→ 如何/何导/导出/出测/测评/评报/报告。
+ */
+function md_search_terms($query)
+{
+    $q = trim((string)$query);
+    if ($q === '') {
+        return array();
+    }
+    $segs = preg_split('/[\s\p{P}]+/u', $q);
+    if (!is_array($segs)) {
+        $segs = preg_split('/[\s\p{P}]+/', $q);         // 非法 UTF-8 兜底
+    }
+    $mb = function_exists('mb_strlen');
+    $out = array();
+    foreach ($segs as $seg) {
+        $seg = trim((string)$seg);
+        if ($seg === '') {
+            continue;
+        }
+        $len = $mb ? mb_strlen($seg, 'UTF-8') : strlen($seg);
+        $cjk = preg_match('/[\x{3400}-\x{4DBF}\x{4E00}-\x{9FFF}\x{F900}-\x{FAFF}]/u', $seg) === 1;
+        $terms = array();
+        if ($cjk) {
+            if ($len <= 2) {
+                $terms[] = $seg;
+            } else {
+                for ($i = 0; $i + 2 <= $len; $i++) {
+                    $terms[] = $mb ? mb_substr($seg, $i, 2, 'UTF-8') : substr($seg, $i, 2);
+                }
+            }
+        } else {
+            $terms[] = $mb ? mb_strtolower($seg, 'UTF-8') : strtolower($seg);
+        }
+        foreach ($terms as $t) {
+            if ($t !== '' && !isset($out[$t])) {
+                $out[$t] = true;
+                if (count($out) >= MD_SEARCH_TERMS_MAX) {
+                    return array_keys($out);
+                }
+            }
+        }
+    }
+    return array_keys($out);
+}
+
+/**
+ * 全文搜索（v1.30.0：分词 + 覆盖度排序）。
+ *
+ * 命中判定从「整串精确匹配」改为「任一词元命中」：
+ *   - 中文按相邻二元组建词元，词序无关（报告导出 / 导出报告 都能召回）；
+ *   - 多词与自然语言查询按覆盖度排序（命中词数 / 总词数）；
+ *   - 整句原样命中、标题命中、出现次数继续加权。
+ * 站点搜索、Ctrl+K 建议、MCP search_docs 共用本函数。
+ */
 function md_search($query, $cfg, $limit = 50, $sort = 'score')
 {
     $query = trim((string)$query);
     if ($query === '') {
+        return array();
+    }
+    $terms = md_search_terms($query);
+    if (!$terms) {
         return array();
     }
     $index = md_search_index_build($cfg);
@@ -1558,39 +1622,60 @@ function md_search($query, $cfg, $limit = 50, $sort = 'score')
 
     $useMb = function_exists('mb_stripos');
     $q = $query;
+    $total = count($terms);
     $results = array();
 
     foreach ($index['text'] as $rel => $text) {
         $title = md_title_of($rel);
-        if ($useMb) {
-            $posTitle = mb_stripos($title, $q, 0, 'UTF-8');
-            $posBody = mb_stripos($text, $q, 0, 'UTF-8');
-        } else {
-            $posTitle = stripos($title, $q);
-            $posBody = stripos($text, $q);
+        $matched = 0;
+        $hits = 0;
+        $firstPos = false;
+        foreach ($terms as $term) {
+            $pos = $useMb ? mb_stripos($text, $term, 0, 'UTF-8') : stripos($text, $term);
+            if ($pos === false) {
+                continue;
+            }
+            $matched++;
+            if ($firstPos === false || $pos < $firstPos) {
+                $firstPos = $pos;
+            }
+            // 命中次数（mb_substr_count 是 PHP 8.0+，用循环实现保证 7.1 可用；计次封顶）
+            $n = 1;
+            $offset = $pos + 1;
+            while ($n < MD_SEARCH_HITS_MAX) {
+                $next = $useMb ? mb_stripos($text, $term, $offset, 'UTF-8') : stripos($text, $term, $offset);
+                if ($next === false) {
+                    break;
+                }
+                $n++;
+                $offset = $next + 1;
+            }
+            $hits += $n;
         }
-        if ($posTitle === false && $posBody === false) {
+        if ($matched === 0) {
             continue;
         }
-        // 命中次数（mb_substr_count 是 PHP 8.0+，用循环实现保证 7.1 可用）
-        $hits = 0;
-        $lowerText = $useMb ? mb_strtolower($text, 'UTF-8') : strtolower($text);
-        $lowerQ = $useMb ? mb_strtolower($q, 'UTF-8') : strtolower($q);
-        $offset = 0;
-        while (($pos = ($useMb ? mb_stripos($lowerText, $lowerQ, $offset, 'UTF-8') : strpos($lowerText, $lowerQ, $offset))) !== false) {
-            $hits++;
-            $offset = $pos + max(1, $useMb ? mb_strlen($lowerQ, 'UTF-8') : strlen($lowerQ));
-            if ($hits > 500) {
-                break;                                  // 防极端长文拖慢
+
+        $posPhrase = $useMb ? mb_stripos($text, $q, 0, 'UTF-8') : stripos($text, $q);
+        $posTitlePhrase = $useMb ? mb_stripos($title, $q, 0, 'UTF-8') : stripos($title, $q);
+        $titleMatched = 0;                             // 标题命中的词元数：标题比正文更能代表主题
+        foreach ($terms as $term) {
+            if (($useMb ? mb_stripos($title, $term, 0, 'UTF-8') : stripos($title, $term)) !== false) {
+                $titleMatched++;
             }
         }
-        $score = $hits + ($posTitle !== false ? 100 : 0);
+        $score = (int)round($matched / $total * 1000)         // 覆盖度：命中的词元占比
+               + ($posPhrase !== false ? 400 : 0)             // 整句原样命中
+               + ($posTitlePhrase !== false ? 600 : 0)        // 标题整句命中
+               + min(5, $titleMatched) * 150                  // 标题逐词元命中（封顶 5 个）
+               + min(10, $hits);                              // 出现次数（封顶，防长文刷分）
         $results[] = array(
             'rel'   => $rel,
             'title' => $title,
             'score' => $score,
+            'coverage' => round($matched / $total, 3),
             'mtime' => isset($index['mtime'][$rel]) ? (int)$index['mtime'][$rel] : 0,
-            'snippet' => md_search_snippet($text, $q, $useMb),
+            'snippet' => md_search_snippet($text, $terms, $useMb, 120, $firstPos),
         );
     }
 
@@ -1636,16 +1721,31 @@ function md_search_sort_results(&$results, $sort)
     return $results;
 }
 
-function md_search_snippet($text, $q, $useMb, $len = 120)
+/**
+ * 摘要片段：优先围绕整句/首个命中词元截取（v1.30.0 支持词元数组）。
+ * $pos 由调用方传入时直接使用（已在主循环里算好），避免重复扫描。
+ */
+function md_search_snippet($text, $q, $useMb, $len = 120, $pos = null)
 {
-    if ($useMb) {
-        $pos = mb_stripos($text, $q, 0, 'UTF-8');
+    if ($pos === null) {
+        $needles = is_array($q) ? $q : array($q);
+        $pos = false;
+        foreach ($needles as $needle) {
+            $needle = (string)$needle;
+            if ($needle === '') {
+                continue;
+            }
+            $p = $useMb ? mb_stripos($text, $needle, 0, 'UTF-8') : stripos($text, $needle);
+            if ($p !== false && ($pos === false || $p < $pos)) {
+                $pos = $p;
+            }
+        }
         $pos = $pos === false ? 0 : $pos;
+    }
+    if ($useMb) {
         $start = max(0, $pos - 40);
         $snippet = mb_substr($text, $start, $len, 'UTF-8');
     } else {
-        $pos = stripos($text, $q);
-        $pos = $pos === false ? 0 : $pos;
         $start = max(0, $pos - 40);
         $snippet = substr($text, $start, $len);
     }
@@ -1675,23 +1775,50 @@ function md_highlight_entities_restore($html, &$store)
     }, $html);
 }
 
+/**
+ * 高亮正则（v1.30.0）：接受词元数组或单串；转义后按长度降序拼成 /a|b|c/i。
+ * 长词优先，避免短词把长词劈成两段。空/无效返回空串（调用方原样返回 HTML）。
+ */
+function md_highlight_pattern($q)
+{
+    $list = is_array($q) ? $q : array($q);
+    $items = array();
+    foreach ($list as $t) {
+        $t = md_e((string)$t);
+        if ($t !== '') {
+            $items[$t] = true;
+        }
+    }
+    if (!$items) {
+        return '';
+    }
+    $arr = array_keys($items);
+    usort($arr, function ($a, $b) {
+        return strlen($b) - strlen($a);
+    });
+    $quoted = array();
+    foreach ($arr as $t) {
+        $quoted[] = preg_quote($t, '/');
+    }
+    return '/' . implode('|', $quoted) . '/i';
+}
+
 function md_search_highlight($escapedHtml, $q)
 {
-    $eq = md_e($q);
-    if ($eq === '') {
+    $pattern = md_highlight_pattern($q);
+    if ($pattern === '' || $escapedHtml === '') {
         return $escapedHtml;
     }
     $ent = array();
     $html = md_highlight_entities_guard($escapedHtml, $ent);
-    $pattern = '/' . preg_quote($eq, '/') . '/i';
-    $html = preg_replace($pattern, '<mark>' . $eq . '</mark>', $html);
+    $html = preg_replace($pattern, '<mark>$0</mark>', $html);
     return md_highlight_entities_restore($html, $ent);
 }
 
 function md_highlight_in_html($html, $q)
 {
-    $eq = md_e($q);
-    if ($eq === '' || $html === '') {
+    $pattern = md_highlight_pattern($q);
+    if ($pattern === '' || $html === '') {
         return $html;
     }
     $tags = array();
@@ -1703,8 +1830,7 @@ function md_highlight_in_html($html, $q)
 
     $ent = array();
     $tokenized = md_highlight_entities_guard($tokenized, $ent);
-    $pattern = '/' . preg_quote($eq, '/') . '/i';
-    $tokenized = preg_replace($pattern, '<mark>' . $eq . '</mark>', $tokenized);
+    $tokenized = preg_replace($pattern, '<mark>$0</mark>', $tokenized);
     $tokenized = md_highlight_entities_restore($tokenized, $ent);
 
     // 还原标签
@@ -1717,15 +1843,14 @@ function md_highlight_in_html($html, $q)
 
 function md_highlight_headings($html, $q)
 {
-    $eq = md_e($q);
-    if ($eq === '') {
+    $pattern = md_highlight_pattern($q);
+    if ($pattern === '' || $html === '') {
         return $html;
     }
-    $pattern = '/' . preg_quote($eq, '/') . '/i';
-    return preg_replace_callback('/(<h[1-6][^>]*>)(.*?)(<\/h[1-6]>)/is', function ($m) use ($eq, $pattern) {
+    return preg_replace_callback('/(<h[1-6][^>]*>)(.*?)(<\/h[1-6]>)/is', function ($m) use ($pattern) {
         $ent = array();
         $inner = md_highlight_entities_guard($m[2], $ent);
-        $inner = preg_replace($pattern, '<mark>' . $eq . '</mark>', $inner);
+        $inner = preg_replace($pattern, '<mark>$0</mark>', $inner);
         return $m[1] . md_highlight_entities_restore($inner, $ent) . $m[3];
     }, $html);
 }

@@ -573,6 +573,7 @@ function md_show_search($tree, $cfg)
                 : '<a href="?q=' . rawurlencode($q) . '&amp;sort=score">' . md_e(md_t('search_sort_score')) . '</a>')
             . '</p>';
         $html .= '<ul class="md-results">';
+        $hiTerms = md_search_terms($q);
         foreach ($results as $r) {
             $url = md_url_for(md_strip_doc_ext($r['rel'], $cfg), 'doc', $cfg);
             // 结果链接带 q，打开后正文高亮
@@ -582,8 +583,8 @@ function md_show_search($tree, $cfg)
                 $shownPath = $r['rel'];
             }
             $html .= '<li><h3><a href="' . md_e($url) . '">'
-                . md_search_highlight(md_e($r['title']), $q) . '</a></h3>'
-                . '<p class="md-snippet">' . md_search_highlight(md_e($r['snippet']), $q) . '</p>'
+                . md_search_highlight(md_e($r['title']), $hiTerms) . '</a></h3>'
+                . '<p class="md-snippet">' . md_search_highlight(md_e($r['snippet']), $hiTerms) . '</p>'
                 . '<p class="md-path">' . md_e($shownPath) . '</p></li>';
         }
         $html .= '</ul>';
@@ -894,8 +895,9 @@ function md_show_doc($docRel, $tree, $cfg, $forceDirRel = null)
     // 搜索词高亮：命中本篇时把正文与标题里的关键词包上 <mark>
     $q = isset($_GET['q']) ? trim((string)$_GET['q']) : '';
     if ($q !== '' && strlen($q) <= 64) {
-        $html = md_highlight_headings($html, $q);
-        $html = md_highlight_in_html($html, $q);
+        $hiTerms = md_search_terms($q);
+        $html = md_highlight_headings($html, $hiTerms);
+        $html = md_highlight_in_html($html, $hiTerms);
     }
 
     $dirRel = $forceDirRel !== null ? $forceDirRel : dirname($docRel);
@@ -2081,9 +2083,14 @@ function md_send_suggest($cfg)
     $q = isset($_GET['q']) ? (string)$_GET['q'] : '';
     $out = array();
     if (trim($q) !== '') {
-        // 快速跳转场景新文档优先（v1.15.1）：时间序，与搜索页默认的相关度序互补
+        // 快速跳转场景新文档优先（v1.15.1）：时间序，与搜索页默认的相关度序互补。
+        // v1.30.0：分词召回后候选变宽，只保留覆盖度 ≥ 0.34 的结果（至少约三分之一的
+        // 查询词元命中），避免「只沾一个词」的页面混进 Ctrl+K 建议。
         foreach (md_search($q, $cfg, 8, 'time') as $r) {
             if (!isset($r['rel']) || (string)$r['rel'] === '') {
+                continue;
+            }
+            if (isset($r['coverage']) && $r['coverage'] < 0.34) {
                 continue;
             }
             $out[] = array(
