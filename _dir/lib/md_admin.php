@@ -3297,21 +3297,20 @@ function md_admin_settings($cfg)
         . '<div class="admin-actions-row"><button class="btn btn-primary" type="submit">' . md_e(md_t('admin_save_settings')) . '</button></div>'
         . '</form></div></section>';
 
-    // ---- pretty 模式伪静态规则卡（沿用含 $uri/ 坑提示的旧文案） ----
+    // ---- pretty 模式伪静态规则卡：规则按当前安装前缀生成（根安装 / 子目录各自正确） ----
     if ($cfg['url_mode'] === 'pretty') {
         // 第二段规则是安全边界：svg/md/markdown/txt 这类"可执行内容"后缀即使真实文件
         // 存在也不许 Web 服务器直出（直出 = 绕开扩展名白名单 + SVG 脚本同源执行），
         // 必须落进 index.php 由程序判定。图片/视频等惰性类型保持静态直出不吃性能。
-        $rules = "# Nginx\nlocation / {\n    try_files \$uri /index.php\$is_args\$args;\n}\n"
-            . "# 附件后缀不直出，交 index.php 判定（svg/md/txt 可执行内容防绕过）\n"
-            . "location ~* \\\\.(svg|md|markdown|txt)\$ {\n    try_files /nonexistent /index.php\$is_args\$args;\n}\n\n"
-            . "# Apache .htaccess\nRewriteEngine On\n"
-            . "RewriteRule \\\\.(svg|md|markdown|txt)\$ index.php [QSA,L,NC]\n"
-            . "RewriteCond %{REQUEST_FILENAME} !-f\nRewriteRule ^ index.php [QSA,L]";
+        $prettyBase = md_base_path($cfg);
+        $prettyPrefix = (is_string($prettyBase) && $prettyBase !== '' && $prettyBase !== false)
+            ? rtrim($prettyBase, '/') : '';
         $body .= '<section class="card"><div class="admin-card-head"><h2>' . md_e(md_t('admin_pretty_title')) . '</h2></div>'
             . '<div class="admin-card-body">'
-            . '<p>' . md_t('admin_pretty_hint') . '</p>'
-            . '<pre class="admin-code">' . md_e($rules) . '</pre>'
+            . '<p>' . md_t('admin_pretty_hint', array(
+                'prefix' => $prettyPrefix === '' ? '/' : $prettyPrefix . '/',
+            )) . '</p>'
+            . '<pre class="admin-code">' . md_e(md_pretty_rules($cfg)) . '</pre>'
             . '</div></section>';
     }
 
@@ -3320,7 +3319,7 @@ function md_admin_settings($cfg)
     // Apache 已由随程序自动生成/补种的 _dir/.htaccess 覆盖；这里给 Nginx 一条可直接粘贴的规则 ----
     $hardBase = md_base_path($cfg);
     $hardPrefix = (is_string($hardBase) && $hardBase !== '' && $hardBase !== false) ? rtrim($hardBase, '/') : '';
-    $hardNginx = '# Nginx：_dir 目录整体禁止直访（与路由模式无关；安装子目录时按实际前缀调整）' . "\n"
+    $hardNginx = '# Nginx：_dir 目录整体禁止直访（与路由模式无关；前缀已按当前安装路径生成）' . "\n"
         . 'location ^~ ' . $hardPrefix . '/_dir/ {' . "\n    return 404;\n}";
     $body .= '<section class="card"><div class="admin-card-head"><h2>' . md_e(md_t('admin_hard_title')) . '</h2></div>'
         . '<div class="admin-card-body">'

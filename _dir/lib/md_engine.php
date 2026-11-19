@@ -156,6 +156,40 @@ function md_base_path($cfg)
     return md_base_path_normalize($dir);
 }
 
+/**
+ * 后台「伪静态规则」卡的文本（纯函数，可测）。
+ *
+ * 规则按当前安装前缀生成：根安装 → location /；子目录安装 → location /docs/ 且回退
+ * /docs/index.php（子目录形态不能保留 location /，否则会把同域主站其它路径也拽给
+ * DirDocs）。后缀正则在子目录形态下按前缀收口，不影响同域其它站点；反斜杠只输出
+ * 一层（\.），多一层 PCRE 会当成「反斜杠 + 任意字符」，规则永不命中（旧卡片文本
+ * 就是双层，复制出去等于没加）。
+ * Apache 段是安装目录里的 .htaccess：模式相对该目录，无需改前缀。
+ */
+function md_pretty_rules($cfg)
+{
+    $base = md_base_path($cfg);
+    $prefix = (is_string($base) && $base !== '' && $base !== false) ? rtrim($base, '/') : '';
+    $loc = $prefix === '' ? '/' : $prefix . '/';
+    $entry = $prefix . '/index.php';
+
+    $out = '# Nginx' . ($prefix === '' ? '（安装于站点根目录）' : '（安装于 ' . $prefix . '/）') . "\n";
+    if ($prefix !== '') {
+        $out .= 'location = ' . $prefix . " {\n    return 301 " . $prefix . '/$is_args$args;' . "\n}\n";
+    }
+    $out .= 'location ' . $loc . " {\n    try_files \$uri " . $entry . "\$is_args\$args;\n}\n"
+        . "# 附件后缀不直出，交 index.php 判定（svg/md/txt 可执行内容防绕过）\n"
+        . 'location ~* ' . ($prefix === '' ? '' : '^' . preg_quote($prefix, '~') . '/.*')
+        . '\.(svg|md|markdown|txt)$ {' . "\n"
+        . '    try_files /nonexistent ' . $entry . "\$is_args\$args;\n}\n\n"
+        . '# Apache .htaccess（' . ($prefix === '' ? '站点根目录' : $prefix . '/') . "，规则相对安装目录）\n"
+        . "RewriteEngine On\n"
+        . 'RewriteRule \.(svg|md|markdown|txt)$ index.php [QSA,L,NC]' . "\n"
+        . 'RewriteCond %{REQUEST_FILENAME} !-f' . "\n"
+        . 'RewriteRule ^ index.php [QSA,L]';
+    return $out;
+}
+
 function md_url_encode($rel)
 {
     $segs = explode('/', str_replace('\\', '/', $rel));

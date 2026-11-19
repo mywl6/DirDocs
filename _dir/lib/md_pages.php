@@ -460,6 +460,26 @@ function md_action()
     return $a;
 }
 
+/**
+ * 搜索页判定（index.php 路由用；纯函数，可测）：q 有词，且本次请求不是「打开某篇文档」。
+ *
+ * 两种路由模式标记文档的方式不同：simple 靠 ?p=，pretty 靠路径本身（$p）。
+ * 带 q 的文档地址必须仍按文档渲染——pretty 的搜索结果链接是 /文档?q=词（不带 p），
+ * 只按「没有 ?p=」判断会把点击重新判成搜索页，结果永远点不进文档（正文高亮失效）。
+ * 空 p（含 rewrite 塞进来的 ?p= 或 ?p=/）不算打开文档，仍按搜索处理。
+ */
+function md_is_search_request($p, $pParam, $q)
+{
+    $pp = trim(str_replace('\\', '/', (string)$pParam));
+    if (trim($pp, '/') !== '') {
+        return false;                                  // simple：?p=文档
+    }
+    if ($p !== '' && $p !== 'search') {
+        return false;                                  // pretty：路径即文档/目录
+    }
+    return trim((string)$q) !== '';
+}
+
 /** 首页文档解析：home 配置（仅根目录）→ README → index → home → 首页 → 说明；没有则返回 ''。 */
 function md_home_doc_rel($children, $cfg, $useHomeCfg = true)
 {

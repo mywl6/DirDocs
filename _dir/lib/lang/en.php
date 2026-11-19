@@ -509,7 +509,8 @@ return array(
         . '<code>options</code> declarations). Add a full-page <code>view.php</code> template for a completely different layout. '
         . 'Themes are code — install trusted sources only.',
     'admin_pretty_title'  => 'Rewrite rules',
-    'admin_pretty_hint'   => 'Add the rules below to your server configuration (adjust the prefix to your install path). Make '
+    'admin_pretty_hint'   => 'These rules are generated for your current install path ({prefix}) — paste them as-is. '
+        . 'If you move the install or change <code>base_path</code>, reopen this page and copy again. Make '
         . 'sure to drop <code>$uri/</code>, or directory pages hit autoindex and return 403.',
     'admin_user_card'      => 'Change username',
     'admin_newuser_label'  => 'New username',

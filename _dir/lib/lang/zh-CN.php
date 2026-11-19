@@ -484,7 +484,8 @@ return array(
         . '（<code>name</code> 显示名、<code>vars</code> / <code>vars-dark</code> 深浅两套变量，可选 <code>options</code> 选项声明）'
         . '即可；要完全不同的版式再加 <code>view.php</code> 整页模板。主题即代码，请只安装可信来源。',
     'admin_pretty_title'  => '伪静态规则',
-    'admin_pretty_hint'   => '把下面规则加入你的服务器配置（按实际安装路径调整前缀）。'
+    'admin_pretty_hint'   => '下面规则已按当前安装路径（{prefix}）生成，直接粘贴到服务器配置即可；'
+        . '改过安装目录或 <code>base_path</code> 后回本页重新复制。'
         . '注意 <code>$uri/</code> 必须去掉，否则目录页会被 autoindex 拦截而 403。',
     'admin_user_card'      => '修改账号',
     'admin_newuser_label'  => '新账号',

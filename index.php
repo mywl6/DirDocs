@@ -194,8 +194,11 @@ if ($action === 'recent') {
     md_show_recent($tree, $MD_CFG);
 }
 
-// 搜索：?q= 存在且不带 ?p= 时进结果页（带 p 即为打开文档顺带高亮，否则搜索结果永远回不到文档）
-if (!isset($_GET['p']) && isset($_GET['q']) && trim((string)$_GET['q']) !== '') {
+// 搜索：?q= 有词，且本次请求不是「打开某篇文档」时进结果页。simple 模式文档靠 ?p= 标记
+// （结果链接 ?p=文档&q=词 → 进文档并高亮）；pretty 模式文档在路径里（结果链接 /文档?q=词），
+// 不能只看「没有 ?p=」——否则点搜索结果会被重新判成搜索页，永远回不到文档。判定见
+// md_is_search_request()（有单测）。
+if (md_is_search_request($p, isset($_GET['p']) ? $_GET['p'] : '', isset($_GET['q']) ? $_GET['q'] : '')) {
     md_show_search($tree, $MD_CFG);
 }
 
