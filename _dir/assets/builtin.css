@@ -485,28 +485,44 @@ body.md-sheet-open{overflow:hidden}
 .article-bylines .bi{margin-right:.3rem;font-size:.72rem;color:var(--text3)}
 
 /* ---------------- Markdown 正文（文档排版标尺） ----------------
-   参照 Stripe / GitHub Docs / Vercel 的阅读节奏：
-   正文 16px / 1.8，h1 34px，h2 24px，h3 19px；段距 1.15em，h2 上 2.4em。
+   参照 Tailwind Typography（prose 基准）/ VitePress / GitHub markdown-body：
+   正文 16px / 1.75，段距 1.25em；h1 28px、h2 24px、h3 19px、h4 16px。
+   段前/段后随层级递减（上/下）：h2 3rem/1.5rem、h3 2rem/.75rem、
+   h4 1.5rem/.5rem、h5 1.25rem/.5rem、h6 1rem/.5rem——
+   小字号标题不再继承同一 em 值，避免 h5/h6 的段前反超 h4。
+   首尾元素与「标题紧跟内容」做外边距重置，折叠后不留多余空隙。
    移动档位统一写在文件尾部 max-width:767.98px 块里。 */
-.md-doc{font-size:1rem;line-height:1.75;letter-spacing:0;overflow-wrap:break-word;color:var(--text)}
+.md-doc{
+  font-size:1rem;line-height:1.75;letter-spacing:0;overflow-wrap:break-word;color:var(--text);
+  /* 标题间距刻度（桌面档）：移动档在文件尾部覆写同一组变量 */
+  --h2-mt:3rem;--h2-mb:1.5rem;
+  --h3-mt:2rem;--h3-mb:.75rem;
+  --h4-mt:1.5rem;--h4-mb:.5rem;
+  --h5-mt:1.25rem;--h5-mb:.5rem;
+  --h6-mt:1rem;--h6-mb:.5rem;
+}
 .md-doc h1,.md-doc h2,.md-doc h3,.md-doc h4,.md-doc h5,.md-doc h6{
-  margin:2.2em 0 .7em;line-height:1.3;font-weight:600;color:var(--text);
+  margin:0;line-height:1.3;font-weight:600;color:var(--text);
   letter-spacing:0;
   /* 锚点落点：56px 顶栏之下留 .75rem 呼吸（与 html scroll-padding-top 一致） */
   scroll-margin-top:calc(var(--nav-h) + .75rem);
 }
-.md-doc h1{font-size:1.75rem;font-weight:600;line-height:1.4;margin-top:.1em;margin-bottom:1.25rem}
+.md-doc h1{font-size:1.75rem;font-weight:600;line-height:1.4;margin-bottom:1.25rem}
 .md-doc h2{
   font-size:1.5rem;
-  margin-top:2em;margin-bottom:.65em;
+  margin-top:var(--h2-mt);margin-bottom:var(--h2-mb);
   padding-bottom:0;
   border-bottom:0;
   position:relative;
 }
-.md-doc h3{font-size:1.1875rem;margin-top:1.75em;margin-bottom:.5em}
-.md-doc h4{font-size:1rem;margin-top:1.6em}
-.md-doc h5{font-size:.9375rem}
-.md-doc h6{font-size:.875rem;color:var(--text2)}
+.md-doc h3{font-size:1.1875rem;margin-top:var(--h3-mt);margin-bottom:var(--h3-mb)}
+.md-doc h4{font-size:1rem;margin-top:var(--h4-mt);margin-bottom:var(--h4-mb)}
+.md-doc h5{font-size:.9375rem;margin-top:var(--h5-mt);margin-bottom:var(--h5-mb)}
+.md-doc h6{font-size:.875rem;margin-top:var(--h6-mt);margin-bottom:var(--h6-mb);color:var(--text2)}
+/* 首尾不留外边距；标题后紧跟的元素吃掉自己的上距（连续标题不被拉开） */
+.md-doc > :first-child{margin-top:0}
+.md-doc > :last-child{margin-bottom:0}
+.md-doc h1 + *,.md-doc h2 + *,.md-doc h3 + *,.md-doc h4 + *,.md-doc h5 + *,.md-doc h6 + *{margin-top:0}
 /* 标题右侧悬停锚点（builtin.js 注入，hover 显现，点击复制完整链接） */
 .header-anchor{
   position:absolute;right:0;top:2px;
@@ -958,9 +974,16 @@ body.md-sheet-open{overflow:hidden}
    阶梯数值见「Markdown 正文」注释块。 */
 @media (max-width:767.98px){
   /* 阅读阶梯（移动档） */
-  .md-doc{font-size:.9375rem;line-height:1.75}
+  .md-doc{
+    font-size:.9375rem;line-height:1.75;
+    /* 移动档间距收一档；只改变量，避免反盖上面的首尾/连续标题重置 */
+    --h2-mt:2rem;--h2-mb:1rem;
+    --h3-mt:1.5rem;--h3-mb:.75rem;
+    --h4-mt:1.25rem;--h4-mb:.5rem;
+    --h5-mt:1rem;--h6-mt:.875rem;
+  }
   .md-doc h1{font-size:1.75rem}
-  .md-doc h2{font-size:1.25rem;margin-top:2em;margin-bottom:.5em;padding-right:2rem} /* 右侧留出锚点区，标题不与锚点重叠 */
+  .md-doc h2{font-size:1.25rem;padding-right:2rem} /* 右侧留出锚点区，标题不与锚点重叠 */
   .md-doc h3{font-size:1.0625rem}
   .md-doc h4{font-size:.9375rem}
   .md-doc h5{font-size:.875rem}
