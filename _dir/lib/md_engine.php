@@ -1936,6 +1936,11 @@ define('MD_MCP_TOKENS_MAX', 20);
 /**
  * token 记录归一化（config 写坏不报错）：只保形态合法的条目，scope 收口 read/write，
  * 数量封顶。判定与 md_config_load 对其余键的守卫同型。
+ *
+ * v1.29.0：除 hash（password_hash 结果，后台生成页写入）外，也接受手编 config 的明文
+ * token 键（16~128 字符）——无后台版没有生成页，这是配置令牌的唯一途径。两者可并存，
+ * 校验侧对 hash 走 password_verify、对 token 走 hash_equals。
+ * 无后台形态（!MD_ADMIN）一律把 scope 收口为 read：该形态根本没有写工具，令牌也不该声称可写。
  */
 function md_mcp_tokens_normalize($list)
 {
@@ -1943,19 +1948,31 @@ function md_mcp_tokens_normalize($list)
     if (!is_array($list)) {
         return $out;
     }
+    $readOnly = defined('MD_ADMIN') ? !MD_ADMIN : false;
     foreach ($list as $id => $t) {
-        if (!is_array($t) || !isset($t['hash']) || !is_string($t['hash']) || $t['hash'] === '') {
+        if (!is_array($t)) {
             continue;
+        }
+        $hash = (isset($t['hash']) && is_string($t['hash'])) ? $t['hash'] : '';
+        $plain = (isset($t['token']) && is_string($t['token'])) ? $t['token'] : '';
+        if ($hash === '' && (strlen($plain) < 16 || strlen($plain) > 128)) {
+            continue;                                    // 无哈希且明文不在合法长度：整条丢弃
         }
         $id = preg_match('/^[0-9a-f]{1,16}$/', (string)$id) === 1
             ? (string)$id : substr(md5((string)$id), 0, 8);
-        $out[$id] = array(
+        $rec = array(
             'name'    => isset($t['name']) && is_string($t['name']) ? substr($t['name'], 0, 120) : '',
-            'hash'    => $t['hash'],
-            'scope'   => (isset($t['scope']) && $t['scope'] === 'write') ? 'write' : 'read',
+            'scope'   => (!$readOnly && isset($t['scope']) && $t['scope'] === 'write') ? 'write' : 'read',
             'created' => isset($t['created']) ? (int)$t['created'] : 0,
             'last'    => isset($t['last']) ? (int)$t['last'] : 0,
         );
+        if ($hash !== '') {
+            $rec['hash'] = $hash;
+        }
+        if ($plain !== '') {
+            $rec['token'] = $plain;
+        }
+        $out[$id] = $rec;
         if (count($out) >= MD_MCP_TOKENS_MAX) {
             break;
         }

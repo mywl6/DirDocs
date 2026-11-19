@@ -4,6 +4,45 @@ DirDocs 对外可见的变更，按版本倒序记录，格式参照
 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。同一版本内按
 **新增 / 变更 / 修复 / 安全** 分组。
 
+## v1.29.0 - 2026-11-19
+
+### 新增
+
+- **无后台版也有 MCP 接口（自动降级只读）**：此前 `?a=mcp` 只在完整版存在，无后台版
+  把 AI 助手完全挡在门外。现在两形态共用 `md_mcp.php`，无后台版的工具清单只保留
+  `list_docs` / `read_doc` / `search_docs` / `get_site_info`——`write_doc` 不在清单里，
+  直接调用返回 `Unknown tool`（不是靠权限拦截：该形态根本没有 `md_doc_save`）。
+  `initialize` 的 instructions 会明说「本部署只读」，`get_site_info.read_only` 恒为 true。
+  草稿在该形态下对 MCP 同样不可见（`list_docs` 不列出、`read_doc` 返回 404、文档数只计
+  已发布），与公开站点保持一致。站点装在子目录时，同级项目直接用相对路径调用
+  （`POST /docs/?a=mcp`），不需要任何伪静态规则。
+
+### 修复
+
+- **MCP 工具标题回退**：`list_docs` / `read_doc` 对没有 front-matter title、也没有首行
+  H1 的文档返回空标题，而 `search_docs` 能给出文件名兜底的标题。现在两处统一走
+  `md_title_of()` 的既有回退规则（front-matter/H1 优先，否则文件名去后缀、去 `{{别名}}`），
+  与搜索、后台评论页、页面 `<title>` 完全一致。
+- **手编 config 的明文令牌**：无后台版没有令牌生成页，`_dir/config.php` 的 `mcp_tokens`
+  现在接受明文 `token` 键（16~128 字符，校验走 `hash_equals` 定长比较），
+  例如
+  `'ai' => array('name' => 'AI 助手', 'scope' => 'read', 'token' => '……')`。
+  后台生成的 `hash` 令牌继续可用，两种形态可写在同一条记录里；无后台形态下所有
+  scope 一律收口为 `read`。
+
+### 变更
+
+- **`read_doc` 直接返回裸 markdown**：此前正文被塞进一层 JSON 字符串，模型拿到的是带
+  `\n` 转义的文本；现在 `content[0].text` 就是原样 markdown，路径/标题/`draft`/时间等
+  元信息放进 MCP 标准的 `structuredContent`。`list_docs` / `search_docs` 等表格型工具
+  仍返回 JSON。
+- 发行包差异从四个文件收窄为三个（`md_admin.php`、`admin.css`、`admin.js`）：
+  **升级到无后台版时不要再删 `_dir/lib/md_mcp.php`**，删掉端点就整体消失了。
+  发布工作流与 README / Release 说明已同步。
+- 无后台版的 `md_config_load` 不再对 `mcp_tokens` 做「无后台即忽略」的隐含假设，
+  令牌正常参与认证；`md_mcp_token_touch` 在没有 `md_config_set` 的形态下直接跳过，
+  不会因缺少后台函数而报错。
+
 ## v1.28.0 - 2026-11-10
 
 ### 新增

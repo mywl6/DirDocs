@@ -5,13 +5,20 @@
  * 端点：POST ?a=mcp，JSON-RPC 2.0。走 Streamable HTTP 传输的无状态形态：不建会话
  * （忽略 Mcp-Session-Id）、不开 SSE——tools 一问一答纯 JSON 应答，官方客户端均可直连。
  *
- * 工具 5 个（v1.20.0）：list_docs / read_doc / search_docs（只读）+
- * write_doc（写，默认落草稿）+ get_site_info（辅助）。upload_media 暂缓：
- * 价值最低而攻击面新增最明显，且 SVG 要与 Sec-Fetch-Dest 策略重新对账。
+ * 两形态共用本模块（v1.29.0）：
+ *   完整版（md_admin.php 在盘上）——5 个工具：list_docs / read_doc / search_docs（只读）
+ *     + write_doc（写，默认落草稿）+ get_site_info（辅助）。
+ *   无后台版——自动降级为纯只读：工具清单只含 list_docs / read_doc / search_docs /
+ *     get_site_info，写工具既不列出也调不到（md_doc_save 在该形态不存在）。
+ *     令牌没有生成页，手编 _dir/config.php 的 mcp_tokens 配置（明文 token
+ *     或 password_hash 哈希两种写法，见 config.sample.php），scope 一律按 read 收口；
+ *     草稿在该形态下与公开站点一致地不可见（list_docs 不列出、read_doc 返回 404）。
+ * upload_media 暂缓：价值最低而攻击面新增最明显，且 SVG 要与 Sec-Fetch-Dest 策略重新对账。
  *
  * 设计红线（与 README「安全设计」逐条对应）：
- *   - 认证前置：无 Bearer token 一律 401，不进入协议处理；token 只存 password_hash
- *     哈希，明文仅在后台生成时展示一次；记录存 _dir/config.php 的 mcp_tokens 键
+ *   - 认证前置：无 Bearer token 一律 401，不进入协议处理；后台生成的 token 只存
+ *     password_hash 哈希，明文仅在生成时展示一次；手编令牌（无后台版唯一途径）以明文
+ *     存于 config.php，比较走 hash_equals；记录存 _dir/config.php 的 mcp_tokens 键
  *     （与口令哈希/TOTP 同一张表、同一个找回路径）；
  *   - scope 分离：read token 调写工具返回权限错误；write_doc 默认强制 draft: true，
  *     与后台编辑走同一条保存路径（md_doc_save：front-matter 校验/路径与扩展名白名单/
@@ -74,7 +81,6 @@ function md_mcp_token_build($name, $scope)
     );
 }
 
-/** 校验 Bearer 明文：命中返回 array(id/name/scope)，不命中 false。逐条 password_verify。 */
 function md_mcp_token_verify($plain, $tokens)
 {
     $plain = (string)$plain;
@@ -82,7 +88,15 @@ function md_mcp_token_verify($plain, $tokens)
         return false;
     }
     foreach ($tokens as $id => $t) {
-        if (isset($t['hash']) && is_string($t['hash']) && password_verify($plain, $t['hash'])) {
+        $hit = false;
+        if (isset($t['hash']) && is_string($t['hash']) && $t['hash'] !== '') {
+            $hit = password_verify($plain, $t['hash']);
+        }
+        // 手编 config 的明文令牌（无后台版没有生成页）：定长比较，避免时序侧信道
+        if (!$hit && isset($t['token']) && is_string($t['token']) && $t['token'] !== '') {
+            $hit = hash_equals($t['token'], $plain);
+        }
+        if ($hit) {
             return array(
                 'id'    => (string)$id,
                 'name'  => isset($t['name']) ? (string)$t['name'] : '',
@@ -93,9 +107,15 @@ function md_mcp_token_verify($plain, $tokens)
     return false;
 }
 
-/** 更新最近使用时间：60 秒内不重复落盘（避免每个 API 请求都写一次 config.php）。 */
+/**
+ * 更新最近使用时间：60 秒内不重复落盘（避免每个 API 请求都写一次 config.php）。
+ * 无后台版没有配置写入函数（md_config_set 住在 md_admin.php），last 不落盘。
+ */
 function md_mcp_token_touch($id)
 {
+    if (!function_exists('md_config_set')) {
+        return;
+    }
     $cfg = md_config_load();
     if (!isset($cfg['mcp_tokens'][$id]['last'])) {
         return;
@@ -434,12 +454,29 @@ function md_mcp_tool_result($payload, $isError = false)
     return $r;
 }
 
+/**
+ * tools/call 结果：正文直接给裸文本，不再套 JSON 转义（read_doc 用）。
+ * 模型拿到的是可直接读的 markdown；路径/标题/draft 等元信息放 structuredContent，
+ * 客户端支持就取，不支持也不影响正文。
+ */
+function md_mcp_tool_text($text, $structured = null)
+{
+    $r = array('content' => array(array('type' => 'text', 'text' => (string)$text)));
+    if (is_array($structured)) {
+        $r['structuredContent'] = $structured;
+    }
+    return $r;
+}
+
 // ---------------------------------------------------------------- 工具定义
 
-/** 工具清单（描述面向 AI，用英文；inputSchema 为 JSON Schema 的最小子集）。 */
+/**
+ * 工具清单（描述面向 AI，用英文；inputSchema 为 JSON Schema 的最小子集）。
+ * 写工具只在完整版出现：无后台形态根本没有 md_doc_save，清单里不能有它也调不到它。
+ */
 function md_mcp_tools()
 {
-    return array(
+    $tools = array(
         array(
             'name' => 'list_docs',
             'description' => 'List all documents on this DirDocs site as a flat tree: paths, titles, '
@@ -483,7 +520,9 @@ function md_mcp_tools()
                 'additionalProperties' => false,
             ),
         ),
-        array(
+    );
+    if (defined('MD_ADMIN') && MD_ADMIN) {
+        $tools[] = array(
             'name' => 'write_doc',
             'description' => 'Create or overwrite a markdown document. Saved as DRAFT (hidden from '
                 . "navigation/search/RSS) until reviewed and published in the admin, unless publish=true "
@@ -505,23 +544,36 @@ function md_mcp_tools()
                 'required' => array('path', 'content'),
                 'additionalProperties' => false,
             ),
-        ),
-        array(
-            'name' => 'get_site_info',
-            'description' => 'Get site name, language, version, document counts, read-only status '
-                . "and the current token's scope. Call this first to learn about the site.",
-            'inputSchema' => array(
-                'type' => 'object',
-                // 空 properties 必须 cast 成 object：空 PHP 数组会编码成 []，
-                // 客户端按 JSON Schema 校验 properties 为 record 时会拒收（ping 同款坑）
-                'properties' => (object)array(),
-                'additionalProperties' => false,
-            ),
+        );
+    }
+    $tools[] = array(
+        'name' => 'get_site_info',
+        'description' => 'Get site name, language, version, document counts, read-only status '
+            . "and the current token's scope. Call this first to learn about the site.",
+        'inputSchema' => array(
+            'type' => 'object',
+            // 空 properties 必须 cast 成 object：空 PHP 数组会编码成 []，
+            // 客户端按 JSON Schema 校验 properties 为 record 时会拒收（ping 同款坑）
+            'properties' => (object)array(),
+            'additionalProperties' => false,
         ),
     );
+    return $tools;
 }
 
 // ---------------------------------------------------------------- 工具实现
+
+/**
+ * 文档标题：与搜索 / 后台 / 模板同一条回退规则——front-matter 或首行 H1 为空时用文件名
+ * （去后缀、去 {{别名}}，见 md_title_of），不返回空串。
+ */
+function md_mcp_title($rel, $info)
+{
+    if (isset($info['title']) && is_string($info['title']) && $info['title'] !== '') {
+        return $info['title'];
+    }
+    return md_title_of($rel);
+}
 
 function md_mcp_call_list_docs($args, $cfg)
 {
@@ -539,10 +591,13 @@ function md_mcp_call_list_docs($args, $cfg)
         if ($needle !== '' && !md_starts_with($rel, $needle)) {
             continue;
         }
+        if (!MD_ADMIN && !empty($info['draft'])) {
+            continue;                                // 无后台形态：草稿与公开站点一样不可见
+        }
         $mtime = isset($info['mtime']) ? (int)$info['mtime'] : 0;
         $docs[] = array(
             'path'    => $rel,
-            'title'   => isset($info['title']) ? (string)$info['title'] : '',
+            'title'   => md_mcp_title($rel, $info),
             'mtime'   => $mtime,
             'updated' => $mtime > 0 ? date('c', $mtime) : '',
             'draft'   => !empty($info['draft']),
@@ -571,21 +626,23 @@ function md_mcp_call_read_doc($args, $cfg)
     if ($abs === false) {
         return md_mcp_tool_result(array('error' => md_t('mcp_err_404', array('path' => $path))), true);
     }
+    $rel = md_rel($abs);
+    $tree = md_tree_load($cfg);
+    $info = isset($tree['md'][$rel]) ? $tree['md'][$rel] : array();
+    if (!MD_ADMIN && !empty($info['draft'])) {           // 无后台形态：草稿与公开站点一样不可见
+        return md_mcp_tool_result(array('error' => md_t('mcp_err_404', array('path' => $path))), true);
+    }
     $c = md_read_text($abs);
     if ($c === false) {
         return md_mcp_tool_result(array('error' => md_t('mcp_err_404', array('path' => $path))), true);
     }
-    $rel = md_rel($abs);
-    $tree = md_tree_load($cfg);
-    $info = isset($tree['md'][$rel]) ? $tree['md'][$rel] : array();
     $mtime = isset($info['mtime']) ? (int)$info['mtime'] : (@filemtime($abs) ?: 0);
-    return md_mcp_tool_result(array(
+    return md_mcp_tool_text($c, array(
         'path'    => $rel,
-        'title'   => isset($info['title']) ? (string)$info['title'] : '',
+        'title'   => md_mcp_title($rel, $info),
         'draft'   => !empty($info['draft']),
         'mtime'   => $mtime,
         'updated' => $mtime > 0 ? date('c', $mtime) : '',
-        'content' => $c,
     ));
 }
 
@@ -618,6 +675,9 @@ function md_mcp_call_search_docs($args, $cfg)
 
 function md_mcp_call_write_doc($args, $cfg, $tok)
 {
+    if (!defined('MD_ADMIN') || !MD_ADMIN) {            // 无后台形态：写路径整体不存在
+        return md_mcp_tool_result(array('error' => md_t('mcp_err_readonly')), true);
+    }
     if (!empty($cfg['read_only']) || MD_READONLY) {
         return md_mcp_tool_result(array('error' => md_t('mcp_err_readonly')), true);
     }
@@ -658,11 +718,16 @@ function md_mcp_call_write_doc($args, $cfg, $tok)
 function md_mcp_call_site_info($args, $cfg, $tok)
 {
     $tree = md_tree_load($cfg);
+    $docs = 0;
     $drafts = 0;
     foreach ($tree['md'] as $info) {
         if (!empty($info['draft'])) {
             $drafts++;
+            if (!MD_ADMIN) {
+                continue;                            // 无后台形态：草稿不计入可见文档
+            }
         }
+        $docs++;
     }
     $names = array();
     foreach (md_mcp_tools() as $d) {
@@ -675,9 +740,9 @@ function md_mcp_call_site_info($args, $cfg, $tok)
         'language'    => md_lang_current(),
         'url_mode'    => (string)$cfg['url_mode'],
         'base_path'   => md_base_path($cfg),
-        'read_only'   => !empty($cfg['read_only']) || MD_READONLY,
-        'docs'        => count($tree['md']),
-        'drafts'      => $drafts,
+        'read_only'   => !empty($cfg['read_only']) || MD_READONLY || !MD_ADMIN,
+        'docs'        => $docs,
+        'drafts'      => MD_ADMIN ? $drafts : 0,
         'token'       => array('name' => $tok['name'], 'scope' => $tok['scope']),
         'tools'       => $names,
     ));
@@ -712,9 +777,13 @@ function md_mcp_handle($req, $tok, $ipHash, $cfg)
                 'capabilities'    => array('tools' => array('listChanged' => false)),
                 'serverInfo'      => array('name' => 'dirdocs', 'version' => MD_VERSION),
                 'instructions'    => 'This is a DirDocs site: a file-based Markdown knowledge base. '
-                    . 'list_docs/read_doc/search_docs explore it; write_doc saves AI-generated pages '
-                    . 'as drafts (draft: true) that the site owner reviews and publishes in the admin. '
-                    . 'Prefer write_doc over inventing file-system side effects.',
+                    . 'list_docs/read_doc/search_docs explore it.'
+                    . (MD_ADMIN
+                        ? ' write_doc saves AI-generated pages as drafts (draft: true) that the site owner '
+                            . 'reviews and publishes in the admin. Prefer write_doc over inventing '
+                            . 'file-system side effects.'
+                        : ' This deployment is read-only: documents cannot be created or modified through '
+                            . 'this API.'),
             )));
             break;
         case 'ping':

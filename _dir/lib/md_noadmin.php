@@ -3,8 +3,11 @@
  * 无后台版前台 stub（v1.27.0）——完整版与无后台版共用同一份 index.php，
  * 由 index.php 探测 _dir/lib/md_admin.php 是否在盘上决定加载本文件还是 md_admin.php。
  *
- * 无后台版 = 纯只读站：后台、MCP、评论、反馈通道全部不存在（分发器侧 MD_ADMIN 门），
+ * 无后台版 = 纯只读站：后台、评论、反馈通道全部不存在（分发器侧 MD_ADMIN 门），
  * 文档与附件只能经文件系统（FTP）管理，设置纯靠手编 _dir/config.php。
+ * MCP 端点（?a=mcp）自 v1.29.0 起两形态共用，无后台版由 md_mcp.php 自动降级为只读
+ * （工具清单不含 write_doc）；令牌同样手编 config.php。本文件不需要为它补 stub：
+ * md_mcp_token_touch 用 function_exists('md_config_set') 自行跳过写回。
  * 本文件只补前台代码路径仍会调用的三个「后台 API」缺口，签名与 md_admin.php 保持一致：
  *
  *   md_is_admin()   草稿对所有人 404、登录态相关渲染全部按访客处理
@@ -13,7 +16,8 @@
  *                   md_exec_risk_files 在无后台版直接返回空数组，也不做扫描 IO）
  *
  * 本文件随两个发行包一起分发；完整版加载 md_admin.php 时本文件不加载（空壳无害），
- * 保持「构建差异只有 md_admin.php/md_mcp.php/admin.css/admin.js 四个文件」这一个维度。
+ * 保持「构建差异只有 md_admin.php/admin.css/admin.js 三个文件」这一个维度（v1.29.0：
+ * md_mcp.php 两形态共用，不再属于差异文件）。
  */
 if (!defined('MD_BOOT')) {
     http_response_code(403);

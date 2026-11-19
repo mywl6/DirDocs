@@ -38,14 +38,14 @@ jobs:
           git archive --format=zip --prefix="DirDocs-$VERSION-update/" \
             -o "DirDocs-${GITHUB_REF_NAME}-update.zip" \
             "$GITHUB_REF_NAME" -- index.php _dir/lib _dir/assets LICENSE
-          # 无后台版（v1.27.0）：从上面两个完整包各复制一份，删除后台/MCP/后台资产四个文件。
+          # 无后台版（v1.27.0）：从上面两个完整包各复制一份，删除后台与后台资产三个文件。
           # index.php 按 md_admin.php 是否存在自动切换形态（MD_ADMIN），无需打补丁。
+          # md_mcp.php 自 v1.29.0 起两形态共用（无后台版自动降级只读），不再删除。
           cp "DirDocs-${GITHUB_REF_NAME}.zip" "DirDocs-${GITHUB_REF_NAME}-noadmin.zip"
           cp "DirDocs-${GITHUB_REF_NAME}-update.zip" "DirDocs-${GITHUB_REF_NAME}-update-noadmin.zip"
           for z in "DirDocs-${GITHUB_REF_NAME}-noadmin.zip" "DirDocs-${GITHUB_REF_NAME}-update-noadmin.zip"; do
             zip -d "$z" \
               "*/_dir/lib/md_admin.php" \
-              "*/_dir/lib/md_mcp.php" \
               "*/_dir/assets/admin.css" \
               "*/_dir/assets/admin.js"
           done

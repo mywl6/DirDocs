@@ -41,7 +41,7 @@ define('MD_BOOT', 1);
  * 本文件里的串只作兜底。版本号必须落在升级会覆盖的位置——否则只更新 lib/ 的安装
  * 永远停在旧版本号上，新版本检查会一直提示「有新版」而升级后依旧。
  */
-$md_version = '1.28.0';
+$md_version = '1.29.0';
 $md_verfile = __DIR__ . '/_dir/lib/version.php';
 if (is_file($md_verfile)) {
     $md_v = @include $md_verfile;
@@ -91,17 +91,16 @@ if (function_exists('mb_language')) { mb_language('uni'); }
  * 发行形态开关（v1.27.0）：_dir/lib/md_admin.php 在盘上 = 完整版（后台 + MCP + 评论 + 反馈）；
  * 不在 = 无后台版（纯只读站，由 md_noadmin.php 提供前台 stub）。
  * 不引入配置键——物理存在性即开关，两形态共用同一份 index.php；
- * 互相切换 = 用对应发行包覆盖 _dir/lib/（完整→无后台需按 Release 说明手工删残留文件）。
+ * 互相切换 = 用对应发行包覆盖 _dir/lib/（完整→无后台需按 Release 说明手工删除残留文件）。
+ *
+ * md_mcp.php 两形态共用（v1.29.0）：无后台版没有写工具，端点自动降级为只读，
+ * 令牌手编 _dir/config.php 的 mcp_tokens（无后台版没有生成页）。
  */
 define('MD_ADMIN', is_file(MD_LIB . '/md_admin.php'));
 
-if (MD_ADMIN) {
-    $md_libs = array('md_engine.php', 'md_i18n.php', 'md_pages.php', 'md_theme.php',
-                     'md_admin.php', 'md_mcp.php');
-} else {
-    $md_libs = array('md_engine.php', 'md_i18n.php', 'md_pages.php', 'md_theme.php',
-                     'md_noadmin.php');
-}
+$md_libs = array('md_engine.php', 'md_i18n.php', 'md_pages.php', 'md_theme.php');
+$md_libs[] = MD_ADMIN ? 'md_admin.php' : 'md_noadmin.php';
+$md_libs[] = 'md_mcp.php';
 foreach ($md_libs as $lib) {
     $path = MD_LIB . '/' . $lib;
     if (!is_file($path)) {
@@ -148,8 +147,9 @@ if ($action === 'rss') {
 
 // MCP API（v1.20.0）：POST ?a=mcp JSON-RPC 2.0（Streamable HTTP 无状态形态），认证/HTTPS/
 // 限流闸门在 md_mcp_endpoint 内部。与 feedback 同批：抢在搜索页拦截之前分发。
-// 无后台版无此端点（纯只读），请求落穿到文档路由
-if (MD_ADMIN && $action === 'mcp') {
+// 无后台版同样启用，但工具清单自动降级为只读（无 write_doc）——见 md_mcp_tools()。
+// 站点装在子目录时同理：同级项目直接请求 /docs/?a=mcp（相对路径，不需要伪静态规则）。
+if ($action === 'mcp') {
     md_mcp_endpoint($MD_CFG);
 }
 

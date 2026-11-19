@@ -63,10 +63,12 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
 - **AI 反复重写有后悔药**：在线编辑每次覆盖保存自动留修订版本（每篇最近 20 版），
   可预览、对比、一键恢复；没定稿的先标 `draft: true`，导航/搜索/订阅/sitemap
   全部隐身，后台仍可预览
-- **异地 AI 直写**：内置 MCP 端点（`?a=mcp`，JSON-RPC 2.0）——Claude Code、Cursor 等
-  任何支持 MCP 的 AI 客户端填一段配置就能列出/读取/搜索站点文档，并把 AI 生成的页面
-  直接写入：默认存为草稿等站长审阅，覆盖自动留修订版本；令牌分只读/读写、按哈希存储、
-  双维限流，后台「API 令牌」页生成（机制见下文「安全设计」）
+- **异地 AI 直读/直写**：内置 MCP 端点（`?a=mcp`，JSON-RPC 2.0；站点装在 `/docs` 时
+  同级项目直接请求 `/docs/?a=mcp` 即可，相对路径、不需要伪静态规则）——Claude Code、Cursor 等
+  任何支持 MCP 的 AI 客户端填一段配置就能列出/读取/搜索站点文档，完整版还能把 AI 生成的
+  页面直接写入：默认存为草稿等站长审阅，覆盖自动留修订版本；令牌分只读/读写、按哈希存储、
+  双维限流，后台「API 令牌」页生成（机制见下文「安全设计」）。无后台版同一端点自动降级为
+  **只读**（无写工具），令牌手编 `_dir/config.php`
 - **过时的文档自己浮上来**：每篇底部「这篇文档有帮助吗」匿名投票，聚合计数汇入后台，
   「需改进」多的排前排——就是下一批让 AI 重写的清单（IP 只以哈希进当日限流记账，
   不存原文；只读部署自动隐藏投票胶囊）
@@ -144,17 +146,21 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
 | --- | --- | --- |
 | 正文 / 附件 / 搜索 / 目录树 / RSS / sitemap | ✔ | ✔ |
 | 后台（登录、编辑、上传、主题、设置） | ✔ | — |
-| MCP API（`?a=mcp`，AI 写文档） | ✔ | — |
+| MCP API（`?a=mcp`，AI 读/搜/写） | ✔ | ✔（只读，无写工具） |
 | 访客评论 / 反馈投票 | ✔ | — |
 | 新版本检查 | ✔ | — |
 | 文档与附件管理方式 | 后台 或 文件系统 | 仅文件系统（FTP） |
 | 设置管理方式 | 后台 或 手编 `_dir/config.php` | 仅手编 `_dir/config.php` |
 | 运行时写盘 | 缓存、评论、历史等 | 仅内部缓存 |
 
-无后台版是**纯只读站**：没有任何登录入口、公开写接口或会执行业务写路径的代码——
-`?a=admin`、`?a=mcp`、`?a=comment`、`?a=feedback` 都不存在，草稿对所有人不可见，
-评论表单、反馈胶囊、风险警示条与后台链接一律不渲染。适合「内容由 CI/FTP 同步、
-访问者只读」的场景（对暴露到公网、又不想要任何登录面的站点尤其合适）。
+无后台版是**纯只读站**：没有任何登录入口或可用的写接口——`?a=admin`、`?a=comment`、
+`?a=feedback` 都不存在，写路径依赖的 `md_doc_save` 在该形态根本不存在，草稿对所有人
+不可见，评论表单、反馈胶囊、风险警示条与后台链接一律不渲染。MCP 端点（`?a=mcp`）**存在但自动降级为只读**：
+工具清单只有 `list_docs` / `read_doc` / `search_docs` / `get_site_info`，没有 `write_doc`，
+调写工具返回「未知工具」；草稿同样对 MCP 不可见（`list_docs` 不列出、`read_doc` 返回 404），
+与公开站点保持一致；令牌没有生成页，直接手编 `_dir/config.php` 的 `mcp_tokens`。
+适合「内容由 CI/FTP 同步、访问者只读」的场景（对暴露到公网、又不想要任何登录面的站点尤其合适），
+同时保留给 AI 助手读/搜文档的开放接口。
 
 无后台版**全新部署不需要 `config.php`**（没有后台就没有初始密码流程）：拷 `index.php`
 + `_dir/` 即站。**安装包内已带一份全量注释的 `_dir/config.php`**——所有可配键连同默认值
@@ -162,14 +168,18 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
 打开它取消注释改值即可；`_dir/config.sample.php` 是同一份模板的只读参考副本
 （升级永远不动它，改坏了可以拿它对照恢复）。
 配置文件里与后台相关的键在无后台版**不起作用**：`admin_user`、`admin_pass`、
-`admin_totp`、`mcp_tokens`、`comments`、`smtp_*`、`notify_email`、`update_check`。
+`admin_totp`、`comments`、`smtp_*`、`notify_email`、`update_check`。
+`mcp_tokens` 是例外——**无后台版靠它给 AI 助手发放只读令牌**（没有生成页，只能手编）：
+明文 `token`（16~128 字符）或 `password_hash` 哈希均可，示例见 `_dir/config.sample.php`；
+该形态下 scope 一律按 `read` 收口，写工具不存在。
 注意：安装包用于全新部署，解压覆盖到已有站点会连 `config.php` 一起覆盖——
 已有站点的升级请始终用 update 升级包（升级包不含 `config.php`）。
 
 **切换形态**：升级包只覆盖、不删除。无后台版 → 完整版：用完整版 update 包覆盖，
 后台即恢复（`admin_pass` 为空时首次访问 `?a=admin` 会引导设置密码）。完整版 → 无后台版：
-覆盖 noadmin update 包后，**必须手工删除** `_dir/lib/md_admin.php`、`_dir/lib/md_mcp.php`、
-`_dir/assets/admin.css`、`_dir/assets/admin.js` 四个文件（形态由 `md_admin.php` 是否存在决定）。
+覆盖 noadmin update 包后，**必须手工删除** `_dir/lib/md_admin.php`、
+`_dir/assets/admin.css`、`_dir/assets/admin.js` 三个文件（形态由 `md_admin.php` 是否存在决定；
+`md_mcp.php` 两形态共用，**不要删**——删了 MCP 端点就整体消失了）。
 
 ## 后台
 
@@ -280,10 +290,12 @@ AI 把文档写进哪个目录，把那个目录往任何 PHP 主机一放，它
   可选 TOTP 两步验证（RFC 6238 纯 PHP 实现，设置页扫码/手输密钥绑定，
   动态码失败与密码共用锁定节奏，会话内防重放；验证器丢失时删除
   `_dir/config.php` 的 `admin_totp` 一行即可复位）。
-- **MCP API 令牌**（`?a=mcp`，默认无令牌 = 端点全拒 401）：Bearer 令牌仅存
-  `password_hash` 哈希，明文只在后台生成时展示一次；只读/读写 scope 分离，只读令牌
-  调写工具直接被拒；写入与后台编辑走同一条保存路径（front-matter 校验 + 路径/扩展名
-  白名单 + 符号链接拒绝 + 原子写），且默认落草稿；公网明文 http 调用被 403 拒绝
+- **MCP API 令牌**（`?a=mcp`，默认无令牌 = 端点全拒 401）：完整版在后台生成的
+  Bearer 令牌仅存 `password_hash` 哈希，明文只在生成时展示一次；无后台版没有生成页，
+  令牌手编在 `_dir/config.php`（明文 16~128 字符，比较走 `hash_equals`，scope 一律 read）。
+  只读/读写 scope 分离，只读令牌调写工具直接被拒；写入与后台编辑走同一条保存路径
+  （front-matter 校验 + 路径/扩展名白名单 + 符号链接拒绝 + 原子写），且默认落草稿；
+  公网明文 http 调用被 403 拒绝
   （本机/局域网放行；反代 TLS 终止请在设置里配 https:// 站点地址——
   可伪造的 `X-Forwarded-Proto` 不采信）；按令牌+IP 双维限流（读 600 次/时、
   写 60 次/时，超限 429）；写操作留痕 `cache/mcp-log.jsonl`（时间/令牌/工具/路径，
@@ -368,12 +380,16 @@ into the folder, it is already in the knowledge base.
   (last 20 per doc) with preview, diff and one-click restore; mark unfinished work
   `draft: true` and it vanishes from nav/search/feed/sitemap while staying previewable
   in the admin
-- **Remote AI writes**: a built-in MCP endpoint (`?a=mcp`, JSON-RPC 2.0) — MCP-capable
-  clients like Claude Code or Cursor list/read/search the site's docs and write
-  AI-generated pages straight in with one config block: everything lands as a draft
-  for the owner to review, overwrites keep revisions automatically; tokens split
-  read-only vs read-write, are stored hashed and rate-limited on two axes
-  (create them on the admin "API tokens" page — see ["Security design"](#security-design))
+- **Remote AI reads and writes**: a built-in MCP endpoint (`?a=mcp`, JSON-RPC 2.0 —
+  installed in `/docs`, sibling projects just call `/docs/?a=mcp`; a relative path, no
+  rewrite rules needed) — MCP-capable clients like Claude Code or Cursor list/read/search
+  the site's docs with one config block; the full edition also writes AI-generated pages
+  straight in: everything
+  lands as a draft for the owner to review, overwrites keep revisions automatically; tokens
+  split read-only vs read-write, are stored hashed and rate-limited on two axes
+  (create them on the admin "API tokens" page — see ["Security design"](#security-design)).
+  The no-admin edition exposes the same endpoint **read-only** (no write tool) with tokens
+  hand-written in `_dir/config.php`
 - **Stale docs surface themselves**: an anonymous "was this helpful?" vote sits at the
   bottom of every doc; aggregates flow into the admin, and the most-downvoted docs float
   to the top — that list is exactly what the AI should rewrite next (IPs enter the daily
@@ -468,19 +484,25 @@ config format and docs layout; switching between them is just an overwrite (see
 | --- | --- | --- |
 | Docs / attachments / search / tree / RSS / sitemap | ✔ | ✔ |
 | Admin panel (login, edit, upload, themes, settings) | ✔ | — |
-| MCP API (`?a=mcp`, AI writes docs) | ✔ | — |
+| MCP API (`?a=mcp`, AI reads/searches/writes) | ✔ | ✔ (read-only, no write tool) |
 | Visitor comments / feedback voting | ✔ | — |
 | New-version check | ✔ | — |
 | Doc & attachment management | admin panel or filesystem | filesystem (FTP) only |
 | Settings management | admin panel or hand-edited `_dir/config.php` | hand-edited `_dir/config.php` only |
 | Runtime disk writes | cache, comments, history, … | internal cache only |
 
-The no-admin edition is a **pure read-only site**: no login entry point, no public write
-endpoints, no code paths that perform business writes — `?a=admin`, `?a=mcp`, `?a=comment`
-and `?a=feedback` simply do not exist, drafts are invisible to everyone, and the comment
-form, feedback widget, risk banners and admin links are never rendered. It suits sites
-whose content is synced by CI/FTP and whose visitors only read (especially public-facing
-sites that should carry no login surface at all).
+The no-admin edition is a **pure read-only site**: no login entry point and no usable
+write endpoint — `?a=admin`, `?a=comment` and `?a=feedback` simply do not exist,
+`md_doc_save` (which every write path depends on) is absent, drafts are invisible to
+everyone, and the comment form, feedback widget, risk banners and admin links are never
+rendered. The MCP endpoint
+(`?a=mcp`) **does exist but automatically degrades to read-only**: the tool list carries
+only `list_docs` / `read_doc` / `search_docs` / `get_site_info`, `write_doc` is absent and
+calling it returns "unknown tool"; drafts stay invisible to MCP exactly as they are to the
+public site (`list_docs` skips them, `read_doc` answers 404); tokens have no generation
+page, so you hand-write the `mcp_tokens` key in `_dir/config.php`. It suits sites whose content is synced by CI/FTP and
+whose visitors only read (especially public-facing sites that should carry no login surface
+at all) while still exposing a reading/searching API for AI assistants.
 
 A fresh no-admin install **needs no `config.php`** (no admin means no initial-password
 flow): drop `index.php` + `_dir/` in and it runs. **The install package already carries a
@@ -489,8 +511,12 @@ there (all commented out, which is the same as the default behaviour). To change
 title, theme, `html_mode`, etc., open it, uncomment the keys you want and edit the values;
 `_dir/config.sample.php` is a read-only reference copy of the same template (upgrades never
 touch it, so it is always there to restore against). Keys tied to the admin are **inert**
-in the no-admin edition: `admin_user`, `admin_pass`, `admin_totp`, `mcp_tokens`,
-`comments`, `smtp_*`, `notify_email`, `update_check`.
+in the no-admin edition: `admin_user`, `admin_pass`, `admin_totp`, `comments`, `smtp_*`,
+`notify_email`, `update_check`. `mcp_tokens` is the exception — **it is how the no-admin
+edition issues read-only tokens to AI assistants** (no generation page, so hand-written):
+either a plaintext `token` (16–128 characters) or a `password_hash` hash; see
+`_dir/config.sample.php` for the shape. In that edition scopes are coerced to `read` and
+no write tool exists.
 Note: install packages are for fresh deployments — extracting one over an existing site
 also overwrites `config.php`. Always upgrade existing sites with the update pack, which
 never contains `config.php`.
@@ -499,8 +525,9 @@ never contains `config.php`.
 full update pack and the admin returns (an empty `admin_pass` makes the first visit to
 `?a=admin` walk you through setting a password). Full → no-admin: after applying the
 no-admin update pack you **must manually delete** `_dir/lib/md_admin.php`,
-`_dir/lib/md_mcp.php`, `_dir/assets/admin.css` and `_dir/assets/admin.js` — the edition is
-decided by whether `md_admin.php` exists.
+`_dir/assets/admin.css` and `_dir/assets/admin.js` — the edition is decided by whether
+`md_admin.php` exists. Do **not** delete `_dir/lib/md_mcp.php`: both editions share it, and
+removing it drops the MCP endpoint entirely.
 
 ## Admin panel
 
@@ -596,12 +623,14 @@ Every mechanism is listed in the open — verify each against the source:
   cadence with in-session replay protection; lost authenticator? delete the `admin_totp`
   line in `_dir/config.php` to reset).
 - **MCP API tokens** (`?a=mcp`; with no token created the endpoint answers 401 to
-  everything): Bearer tokens are stored as `password_hash` hashes only — the plaintext
-  is shown exactly once at creation; read-only and read-write scopes are separated, and
-  read-only tokens are refused by write tools; writes go through the exact same save
-  path as the admin editor (front-matter validation + path/extension whitelists +
-  symlink rejection + atomic write) and default to drafts; plain HTTP from the public
-  internet is rejected with 403 (localhost/LAN is allowed; behind a TLS-terminating
+  everything): in the full edition Bearer tokens are stored as `password_hash` hashes
+  only — the plaintext is shown exactly once at creation. The no-admin edition has no
+  generation page, so tokens are hand-written in `_dir/config.php` (plaintext, 16–128
+  characters, compared with `hash_equals`; scopes are coerced to read). Read-only and
+  read-write scopes are separated, and read-only tokens are refused by write tools;
+  writes go through the exact same save path as the admin editor (front-matter validation
+  + path/extension whitelists + symlink rejection + atomic write) and default to drafts;
+  plain HTTP from the public internet is rejected with 403 (localhost/LAN is allowed; behind a TLS-terminating
   proxy set an https:// site address in Settings — the forgeable `X-Forwarded-Proto`
   is never trusted); rate limiting is per token+IP (600 reads/hour, 60 writes/hour,
   429 when exceeded); every write lands in `cache/mcp-log.jsonl` (time/token/tool/path,
